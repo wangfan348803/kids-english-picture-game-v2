@@ -89,18 +89,8 @@ function App() {
       setStreak(nextStreak)
       setScore(nextScore)
       setBest(Math.max(best, nextScore))
-      setFeedback({ tone: 'good', text: `Great! ${item.word} 是「${item.meaning}」。+${gained}` })
+      setFeedback({ tone: 'good', text: `Great! ${item.word} 是「${item.meaning}」。+${gained}，点击下一题继续。` })
       audio().play(nextStreak > 0 && nextStreak % 5 === 0 ? 'bonus' : 'correct')
-      window.setTimeout(() => {
-        setRound((value) => value + 1)
-        const nextTarget = engineRef.current.next()
-        setAnswerReveal('hidden')
-        setTarget(nextTarget)
-        setChoices(buildChoices(vocabulary, nextTarget))
-        setLocked(false)
-        setFeedback({ tone: 'idle', text: '听读音，选择正确图片。' })
-        void audio().speak(nextTarget.word)
-      }, 1450)
     } else {
       setStreak(0)
       setScore((value) => Math.max(0, value - 2))
@@ -123,6 +113,18 @@ function App() {
   function replayTarget() {
     startAudio()
     void audio().speak(target.word)
+  }
+
+  function goToNextRound() {
+    startAudio()
+    setRound((value) => value + 1)
+    const nextTarget = engineRef.current.next()
+    setAnswerReveal('hidden')
+    setTarget(nextTarget)
+    setChoices(buildChoices(vocabulary, nextTarget))
+    setLocked(false)
+    setFeedback({ tone: 'idle', text: '听读音，选择正确图片。' })
+    void audio().speak(nextTarget.word)
   }
 
   const progress = Math.min(100, Math.round((new Set([target.word, ...choices.map((item) => item.word)]).size / vocabulary.length) * 100))
@@ -161,27 +163,27 @@ function App() {
 
         <div className={`feedback ${feedback.tone}`}>{feedback.text}</div>
 
+        {answerVisibility.nextButton ? (
+          <button className="next-button" type="button" onClick={goToNextRound}>
+            下一题
+          </button>
+        ) : null}
+
         <div className="choice-grid" aria-label="图片选项">
           {choices.map((item, index) => (
             <button
-              className={answerVisibility.cardLabels ? 'word-card revealed' : 'word-card'}
+              className={answerVisibility.cardEnglish ? 'word-card revealed' : 'word-card'}
               type="button"
               key={item.word}
               onClick={() => chooseCard(item)}
               disabled={locked}
-              aria-label={answerVisibility.cardLabels ? `${item.word}, ${item.meaning}` : `图片选项 ${index + 1}`}
+              aria-label={answerVisibility.cardEnglish ? `${item.word}, ${item.meaning}` : `${item.meaning}, 图片选项 ${index + 1}`}
             >
-              <span className="picture" role="img" aria-label={answerVisibility.cardLabels ? item.meaning : `图片选项 ${index + 1}`}>
+              <span className="picture" role="img" aria-label={item.meaning}>
                 {item.picture}
               </span>
-              {answerVisibility.cardLabels ? (
-                <>
-                  <strong>{item.word}</strong>
-                  <span>{item.meaning}</span>
-                </>
-              ) : (
-                <span className="option-mark">选项 {index + 1}</span>
-              )}
+              {answerVisibility.cardEnglish ? <strong>{item.word}</strong> : null}
+              <span className={answerVisibility.cardEnglish ? 'card-meaning revealed' : 'card-meaning'}>{item.meaning}</span>
             </button>
           ))}
         </div>

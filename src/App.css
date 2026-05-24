@@ -144,7 +144,8 @@ h2 {
   box-shadow: 0 16px 30px rgba(120, 200, 255, 0.24);
 }
 
-.feedback {
+.feedback,
+.next-button {
   min-height: 44px;
   display: grid;
   place-items: center;
@@ -155,6 +156,14 @@ h2 {
   font-size: 17px;
   font-weight: 950;
   text-align: center;
+}
+
+.next-button {
+  border: 0;
+  color: #fff;
+  background: linear-gradient(135deg, #69d7b1, #78c8ff);
+  box-shadow: 0 16px 28px rgba(105, 215, 177, 0.22);
+  cursor: pointer;
 }
 
 .feedback.good {
@@ -224,19 +233,26 @@ h2 {
   line-height: 1;
 }
 
-.word-card span:last-child {
+.word-card span:last-child,
+.card-meaning {
   color: #687395;
   font-size: 16px;
   font-weight: 850;
 }
 
-.option-mark {
+.card-meaning {
   min-height: 48px;
   display: grid;
   place-items: center;
-  color: #687395;
-  font-size: 17px;
+  color: #53607d;
+  font-size: 20px;
   font-weight: 950;
+}
+
+.card-meaning.revealed {
+  min-height: auto;
+  font-size: 16px;
+  font-weight: 850;
 }
 
 .side-panel {
