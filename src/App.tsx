@@ -78,7 +78,6 @@ function App() {
   function chooseCard(item: VocabularyItem) {
     if (locked) return
     startAudio()
-    void audio().speak(item.word)
 
     if (item.word === target.word) {
       const nextStreak = streak + 1
@@ -91,7 +90,9 @@ function App() {
       setBest(Math.max(best, nextScore))
       setFeedback({ tone: 'good', text: `Great! ${item.word} 是「${item.meaning}」。+${gained}，点击下一题继续。` })
       audio().play(nextStreak > 0 && nextStreak % 5 === 0 ? 'bonus' : 'correct')
+      window.setTimeout(() => void audio().speakAnswer(item.word, item.meaning), 360)
     } else {
+      void audio().speak(item.word)
       setStreak(0)
       setScore((value) => Math.max(0, value - 2))
       setAnswerReveal('hidden')

@@ -83,6 +83,20 @@ export class GameAudio {
     this.start()
     this.play('tap')
 
+    await this.speakSequence([{ text: word, lang: 'en-US', voice: this.pickEnglishVoice.bind(this) }])
+  }
+
+  async speakAnswer(word: string, meaning: string) {
+    if (this.isMuted() || !window.speechSynthesis) return
+    this.start()
+
+    await this.speakSequence([
+      { text: word, lang: 'en-US', voice: this.pickEnglishVoice.bind(this) },
+      { text: meaning, lang: 'zh-CN', voice: this.pickChineseVoice.bind(this) },
+    ])
+  }
+
+  private async speakSequence(parts: Array<{ text: string; lang: string; voice: () => SpeechSynthesisVoice | undefined }>) {
     const attempt = ++this.speechAttempt
     await this.waitForVoices()
     if (attempt !== this.speechAttempt || this.isMuted()) return
@@ -90,20 +104,33 @@ export class GameAudio {
     speechSynthesis.cancel()
     window.setTimeout(() => {
       if (attempt !== this.speechAttempt || this.isMuted()) return
-      const utterance = new SpeechSynthesisUtterance(word)
-      const voice = this.pickEnglishVoice()
-      if (voice) utterance.voice = voice
-      utterance.lang = voice?.lang || 'en-US'
-      utterance.rate = 0.78
-      utterance.pitch = 1.12
-      utterance.volume = this.getVolume() / 100
-      speechSynthesis.speak(utterance)
+      const speakPart = (index: number) => {
+        const part = parts[index]
+        if (!part || attempt !== this.speechAttempt || this.isMuted()) return
+
+        const utterance = new SpeechSynthesisUtterance(part.text)
+        const voice = part.voice()
+        if (voice) utterance.voice = voice
+        utterance.lang = voice?.lang || part.lang
+        utterance.rate = part.lang.startsWith('zh') ? 0.9 : 0.78
+        utterance.pitch = part.lang.startsWith('zh') ? 1.02 : 1.12
+        utterance.volume = this.getVolume() / 100
+        utterance.onend = () => speakPart(index + 1)
+        speechSynthesis.speak(utterance)
+      }
+
+      speakPart(0)
     }, 70)
   }
 
   private pickEnglishVoice() {
     const voices = speechSynthesis.getVoices()
     return voices.find((voice) => /^en[-_](US|GB|AU|CA)/i.test(voice.lang)) ?? voices.find((voice) => /^en/i.test(voice.lang))
+  }
+
+  private pickChineseVoice() {
+    const voices = speechSynthesis.getVoices()
+    return voices.find((voice) => /^zh[-_](CN|Hans)/i.test(voice.lang)) ?? voices.find((voice) => /^zh/i.test(voice.lang))
   }
 
   private waitForVoices() {
