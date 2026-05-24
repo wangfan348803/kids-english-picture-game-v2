@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { categories, type CategoryId, vocabulary, type VocabularyItem } from './data/vocabulary'
 import { GameAudio } from './logic/audio'
+import { type AnswerRevealState, getAnswerVisibility } from './logic/reveal'
 import { buildChoices, createRoundEngine, scoreCorrectAnswer, wordsForCategory } from './logic/round'
 
 type Feedback = {
@@ -23,6 +24,7 @@ function App() {
   const [volume, setVolume] = useState(() => Number(localStorage.getItem('kid-word-v2-volume') || 80))
   const [started, setStarted] = useState(false)
   const [locked, setLocked] = useState(false)
+  const [answerReveal, setAnswerReveal] = useState<AnswerRevealState>('hidden')
   const [feedback, setFeedback] = useState<Feedback>({ tone: 'idle', text: '点击开始学习，听单词，选图片。' })
 
   const categoryWords = useMemo(() => wordsForCategory(vocabulary, activeCategory), [activeCategory])
@@ -60,6 +62,7 @@ function App() {
     engineRef.current.reset(nextCategory)
     const nextTarget = engineRef.current.next()
     setLocked(false)
+    setAnswerReveal('hidden')
     setTarget(nextTarget)
     setChoices(buildChoices(vocabulary, nextTarget))
     setFeedback({ tone: 'idle', text: shouldSpeak ? '听读音，选择正确图片。' : '准备好了就点击喇叭。' })
@@ -82,6 +85,7 @@ function App() {
       const gained = scoreCorrectAnswer(streak)
       const nextScore = score + gained
       setLocked(true)
+      setAnswerReveal('revealed')
       setStreak(nextStreak)
       setScore(nextScore)
       setBest(Math.max(best, nextScore))
@@ -90,16 +94,18 @@ function App() {
       window.setTimeout(() => {
         setRound((value) => value + 1)
         const nextTarget = engineRef.current.next()
+        setAnswerReveal('hidden')
         setTarget(nextTarget)
         setChoices(buildChoices(vocabulary, nextTarget))
         setLocked(false)
         setFeedback({ tone: 'idle', text: '听读音，选择正确图片。' })
         void audio().speak(nextTarget.word)
-      }, 850)
+      }, 1450)
     } else {
       setStreak(0)
       setScore((value) => Math.max(0, value - 2))
-      setFeedback({ tone: 'try', text: `${item.word} 是「${item.meaning}」，再听一次目标词。` })
+      setAnswerReveal('hidden')
+      setFeedback({ tone: 'try', text: '还不是这张图。再听一次，只看图片再选。' })
       audio().play('wrong')
       window.setTimeout(() => void audio().speak(target.word), 360)
     }
@@ -120,6 +126,7 @@ function App() {
   }
 
   const progress = Math.min(100, Math.round((new Set([target.word, ...choices.map((item) => item.word)]).size / vocabulary.length) * 100))
+  const answerVisibility = getAnswerVisibility(answerReveal)
 
   return (
     <main className="app-shell" aria-label="儿童看图学英语升级版">
@@ -143,7 +150,9 @@ function App() {
           <div>
             <span className="section-label">{categories.find((category) => category.id === activeCategory)?.label}</span>
             <h2>{target.word}</h2>
-            <p>{target.meaning}</p>
+            <p className={answerVisibility.targetMeaning ? 'target-meaning revealed' : 'target-meaning'} aria-live="polite">
+              {answerVisibility.targetMeaning ? target.meaning : '答对后显示中文意思'}
+            </p>
           </div>
           <button className="speaker-button" type="button" onClick={replayTarget} aria-label="播放当前单词">
             🔊
@@ -153,13 +162,26 @@ function App() {
         <div className={`feedback ${feedback.tone}`}>{feedback.text}</div>
 
         <div className="choice-grid" aria-label="图片选项">
-          {choices.map((item) => (
-            <button className="word-card" type="button" key={item.word} onClick={() => chooseCard(item)} disabled={locked}>
-              <span className="picture" role="img" aria-label={item.meaning}>
+          {choices.map((item, index) => (
+            <button
+              className={answerVisibility.cardLabels ? 'word-card revealed' : 'word-card'}
+              type="button"
+              key={item.word}
+              onClick={() => chooseCard(item)}
+              disabled={locked}
+              aria-label={answerVisibility.cardLabels ? `${item.word}, ${item.meaning}` : `图片选项 ${index + 1}`}
+            >
+              <span className="picture" role="img" aria-label={answerVisibility.cardLabels ? item.meaning : `图片选项 ${index + 1}`}>
                 {item.picture}
               </span>
-              <strong>{item.word}</strong>
-              <span>{item.meaning}</span>
+              {answerVisibility.cardLabels ? (
+                <>
+                  <strong>{item.word}</strong>
+                  <span>{item.meaning}</span>
+                </>
+              ) : (
+                <span className="option-mark">选项 {index + 1}</span>
+              )}
             </button>
           ))}
         </div>

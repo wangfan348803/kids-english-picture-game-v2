@@ -123,6 +123,17 @@ h2 {
   font-weight: 900;
 }
 
+.target-meaning {
+  min-height: 32px;
+  color: #7b86a8;
+  font-size: 18px;
+}
+
+.target-meaning.revealed {
+  color: #53607d;
+  font-size: 23px;
+}
+
 .speaker-button {
   width: 84px;
   height: 84px;
@@ -217,6 +228,15 @@ h2 {
   color: #687395;
   font-size: 16px;
   font-weight: 850;
+}
+
+.option-mark {
+  min-height: 48px;
+  display: grid;
+  place-items: center;
+  color: #687395;
+  font-size: 17px;
+  font-weight: 950;
 }
 
 .side-panel {
