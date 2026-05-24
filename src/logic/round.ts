@@ -12,20 +12,30 @@ export function wordsForCategory(vocabulary: VocabularyItem[], categoryId: Categ
   return vocabulary.filter((item) => item.category === categoryId)
 }
 
-export function shuffle<T>(items: T[]) {
-  return [...items].sort(() => Math.random() - 0.5)
+export function shuffle<T>(items: T[], random = Math.random) {
+  return shuffleWithRandom(items, random)
 }
 
-export function buildChoices(vocabulary: VocabularyItem[], target: VocabularyItem, count = 4) {
-  const distractors = shuffle(vocabulary.filter((item) => item.word !== target.word)).slice(0, count - 1)
-  return shuffle([target, ...distractors])
+export function shuffleWithRandom<T>(items: T[], random: () => number) {
+  const shuffled = [...items]
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1))
+    ;[shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]]
+  }
+
+  return shuffled
+}
+
+export function buildChoices(vocabulary: VocabularyItem[], target: VocabularyItem, count = 4, random = Math.random) {
+  const distractors = shuffle(vocabulary.filter((item) => item.word !== target.word), random).slice(0, count - 1)
+  return shuffle([target, ...distractors], random)
 }
 
 export function scoreCorrectAnswer(currentStreak: number) {
   return 10 + Math.min(20, (currentStreak + 1) * 2)
 }
 
-export function createRoundEngine(vocabulary: VocabularyItem[], initialCategory: CategoryId): RoundEngine {
+export function createRoundEngine(vocabulary: VocabularyItem[], initialCategory: CategoryId, random = Math.random): RoundEngine {
   let categoryId = initialCategory
   const recentWords: string[] = []
 
@@ -36,7 +46,7 @@ export function createRoundEngine(vocabulary: VocabularyItem[], initialCategory:
     if (candidates.length === 0) candidates = pool.filter((item) => item.word !== recentWords.at(-1))
     if (candidates.length === 0) candidates = pool
 
-    const selected = shuffle(candidates)[0] ?? vocabulary[0]
+    const selected = shuffle(candidates, random)[0] ?? vocabulary[0]
     recentWords.push(selected.word)
 
     while (recentWords.length > Math.min(recentLimit, Math.max(1, pool.length - 1))) {

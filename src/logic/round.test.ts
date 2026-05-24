@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { categories, vocabulary } from '../data/vocabulary'
-import { buildChoices, createRoundEngine, scoreCorrectAnswer } from './round'
+import { buildChoices, createRoundEngine, scoreCorrectAnswer, shuffle } from './round'
 
 describe('v2 learning data', () => {
   it('starts from All and keeps a large vocabulary with Jobs', () => {
@@ -21,6 +21,12 @@ describe('round engine', () => {
       expect(seen.slice(-3)).not.toContain(next.word)
       seen.push(next.word)
     }
+  })
+
+  it('uses a Fisher-Yates shuffle with injectable randomness', () => {
+    const shuffled = shuffle(['cat', 'dog', 'bird', 'fish'], () => 0)
+
+    expect(shuffled).toEqual(['dog', 'bird', 'fish', 'cat'])
   })
 
   it('builds four choices that include the target exactly once', () => {

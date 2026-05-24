@@ -4,7 +4,8 @@ import { categories, type CategoryId, vocabulary, type VocabularyItem } from './
 import { GameAudio } from './logic/audio'
 import { appendRound, canGoNext, canGoPrevious, createRoundHistory, moveNext, movePrevious, replaceCurrentRound } from './logic/history'
 import { type AnswerRevealState, getAnswerVisibility } from './logic/reveal'
-import { buildChoices, createRoundEngine, scoreCorrectAnswer, wordsForCategory } from './logic/round'
+import { buildChoices, scoreCorrectAnswer, wordsForCategory } from './logic/round'
+import { createLearningSession } from './logic/session'
 
 type Feedback = {
   tone: 'idle' | 'good' | 'try'
@@ -14,11 +15,9 @@ type Feedback = {
 const firstCategory: CategoryId = 'All'
 
 function App() {
+  const [session] = useState(() => createLearningSession(vocabulary, firstCategory))
   const [activeCategory, setActiveCategory] = useState<CategoryId>(firstCategory)
-  const [history, setHistory] = useState(() => {
-    const target = vocabulary[0]
-    return createRoundHistory<VocabularyItem>({ target, choices: buildChoices(vocabulary, target), answerReveal: 'hidden' })
-  })
+  const [history, setHistory] = useState(() => session.history)
   const [score, setScore] = useState(0)
   const [streak, setStreak] = useState(0)
   const [best, setBest] = useState(() => Number(localStorage.getItem('kid-word-v2-best') || 0))
@@ -28,7 +27,7 @@ function App() {
   const [feedback, setFeedback] = useState<Feedback>({ tone: 'idle', text: '点击开始学习，听单词，选图片。' })
 
   const categoryWords = useMemo(() => wordsForCategory(vocabulary, activeCategory), [activeCategory])
-  const engineRef = useRef(createRoundEngine(vocabulary, firstCategory))
+  const engineRef = useRef(session.engine)
   const mutedRef = useRef(muted)
   const volumeRef = useRef(volume)
   const audioRef = useRef<GameAudio | null>(null)
@@ -71,8 +70,8 @@ function App() {
     setFeedback({ tone: 'idle', text: answerReveal === 'revealed' ? '已揭晓答案，可以重听或进入下一题。' : '听读音，选择正确图片。' })
   }
 
-  function newRound(nextCategory = activeCategory, shouldSpeak = started) {
-    engineRef.current.reset(nextCategory)
+  function newRound(nextCategory = activeCategory, shouldSpeak = started, resetEngine = false) {
+    if (resetEngine) engineRef.current.reset(nextCategory)
     const nextTarget = engineRef.current.next()
     setHistory(createRoundHistory({ target: nextTarget, choices: buildChoices(vocabulary, nextTarget), answerReveal: 'hidden' }))
     setFeedback({ tone: 'idle', text: shouldSpeak ? '听读音，选择正确图片。' : '准备好了就点击喇叭。' })
@@ -118,9 +117,8 @@ function App() {
   function changeCategory(categoryId: CategoryId) {
     startAudio()
     setActiveCategory(categoryId)
-    engineRef.current.reset(categoryId)
     audio().play('next')
-    window.setTimeout(() => newRound(categoryId, true), 0)
+    window.setTimeout(() => newRound(categoryId, true, true), 0)
   }
 
   function replayTarget() {
