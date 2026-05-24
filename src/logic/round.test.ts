@@ -9,6 +9,32 @@ describe('v2 learning data', () => {
     expect(vocabulary.length).toBeGreaterThanOrEqual(207)
     expect(new Set(vocabulary.map((item) => item.word)).size).toBe(vocabulary.length)
   })
+
+  it('keeps reviewed meanings, pictures, and speech-friendly words for confusing entries', () => {
+    const entries = new Map(vocabulary.map((item) => [item.word, item]))
+
+    expect(entries.get('desk')).toMatchObject({ meaning: '书桌', picture: '📚' })
+    expect(entries.get('globe')).toMatchObject({ meaning: '地球仪', picture: '🌐' })
+    expect(entries.get('hungry')).toMatchObject({ meaning: '饿了', picture: '🤤' })
+    expect(entries.get('love')).toMatchObject({ meaning: '爱', picture: '🥰' })
+    expect(entries.get('jump')).toMatchObject({ meaning: '跳跃', picture: '🤸' })
+    expect(entries.get('eraser')).toMatchObject({ meaning: '橡皮', picture: '🧽✏️' })
+    expect(entries.get('fire truck')).toMatchObject({ meaning: '消防车', picture: '🚒' })
+    expect(entries.get('grass')).toMatchObject({ meaning: '草', picture: '🌱' })
+    expect(entries.get('table')).toMatchObject({ meaning: '餐桌', picture: '🍽️' })
+    expect(entries.get('fridge')).toMatchObject({ meaning: '冰箱', picture: '🧊🥛' })
+    expect(entries.get('pillow')).toMatchObject({ meaning: '枕头', picture: '🛏️☁️' })
+    expect(entries.get('belt')).toMatchObject({ meaning: '腰带', picture: '👖🟫' })
+    expect(entries.get('proud')).toMatchObject({ meaning: '自豪', picture: '😎' })
+    expect(entries.get('silly')).toMatchObject({ meaning: '滑稽', picture: '😜' })
+    expect(entries.get('gold')).toMatchObject({ meaning: '金色', picture: '🏆' })
+    expect(entries.get('silver')).toMatchObject({ meaning: '银色', picture: '🥈' })
+    expect(entries.get('light')).toMatchObject({ meaning: '浅色', picture: '🤍' })
+    expect(entries.get('colorful')).toMatchObject({ meaning: '五颜六色', picture: '🌈' })
+    expect(entries.get('police officer')).toMatchObject({ meaning: '警察', picture: '👮' })
+    expect(entries.has('firetruck')).toBe(false)
+    expect(entries.has('police')).toBe(false)
+  })
 })
 
 describe('round engine', () => {
