@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { categories, type CategoryId, vocabulary, type VocabularyItem } from './data/vocabulary'
 import { GameAudio } from './logic/audio'
+import { appendRound, canGoNext, canGoPrevious, createRoundHistory, moveNext, movePrevious, replaceCurrentRound } from './logic/history'
 import { type AnswerRevealState, getAnswerVisibility } from './logic/reveal'
 import { buildChoices, createRoundEngine, scoreCorrectAnswer, wordsForCategory } from './logic/round'
 
@@ -14,17 +15,16 @@ const firstCategory: CategoryId = 'All'
 
 function App() {
   const [activeCategory, setActiveCategory] = useState<CategoryId>(firstCategory)
-  const [target, setTarget] = useState<VocabularyItem>(() => vocabulary[0])
-  const [choices, setChoices] = useState<VocabularyItem[]>(() => buildChoices(vocabulary, vocabulary[0]))
+  const [history, setHistory] = useState(() => {
+    const target = vocabulary[0]
+    return createRoundHistory<VocabularyItem>({ target, choices: buildChoices(vocabulary, target), answerReveal: 'hidden' })
+  })
   const [score, setScore] = useState(0)
   const [streak, setStreak] = useState(0)
-  const [round, setRound] = useState(1)
   const [best, setBest] = useState(() => Number(localStorage.getItem('kid-word-v2-best') || 0))
   const [muted, setMuted] = useState(() => localStorage.getItem('kid-word-v2-muted') === 'true')
   const [volume, setVolume] = useState(() => Number(localStorage.getItem('kid-word-v2-volume') || 80))
   const [started, setStarted] = useState(false)
-  const [locked, setLocked] = useState(false)
-  const [answerReveal, setAnswerReveal] = useState<AnswerRevealState>('hidden')
   const [feedback, setFeedback] = useState<Feedback>({ tone: 'idle', text: '点击开始学习，听单词，选图片。' })
 
   const categoryWords = useMemo(() => wordsForCategory(vocabulary, activeCategory), [activeCategory])
@@ -58,33 +58,47 @@ function App() {
     audio().start()
   }
 
+  function speakSnapshot(target: VocabularyItem, answerReveal: AnswerRevealState) {
+    if (answerReveal === 'revealed') {
+      void audio().speakAnswer(target.word, target.meaning)
+      return
+    }
+
+    void audio().speak(target.word)
+  }
+
+  function setCurrentFeedback(answerReveal: AnswerRevealState) {
+    setFeedback({ tone: 'idle', text: answerReveal === 'revealed' ? '已揭晓答案，可以重听或进入下一题。' : '听读音，选择正确图片。' })
+  }
+
   function newRound(nextCategory = activeCategory, shouldSpeak = started) {
     engineRef.current.reset(nextCategory)
     const nextTarget = engineRef.current.next()
-    setLocked(false)
-    setAnswerReveal('hidden')
-    setTarget(nextTarget)
-    setChoices(buildChoices(vocabulary, nextTarget))
+    setHistory(createRoundHistory({ target: nextTarget, choices: buildChoices(vocabulary, nextTarget), answerReveal: 'hidden' }))
     setFeedback({ tone: 'idle', text: shouldSpeak ? '听读音，选择正确图片。' : '准备好了就点击喇叭。' })
     if (shouldSpeak) void audio().speak(nextTarget.word)
   }
 
   function handleStart() {
     startAudio()
+    if (answerReveal === 'revealed') {
+      void audio().speakAnswer(target.word, target.meaning)
+      return
+    }
+
     setFeedback({ tone: 'idle', text: '听读音，选择正确图片。' })
     void audio().speak(target.word)
   }
 
   function chooseCard(item: VocabularyItem) {
-    if (locked) return
+    if (answerReveal === 'revealed') return
     startAudio()
 
     if (item.word === target.word) {
       const nextStreak = streak + 1
       const gained = scoreCorrectAnswer(streak)
       const nextScore = score + gained
-      setLocked(true)
-      setAnswerReveal('revealed')
+      setHistory(replaceCurrentRound(history, { target, choices, answerReveal: 'revealed' }))
       setStreak(nextStreak)
       setScore(nextScore)
       setBest(Math.max(best, nextScore))
@@ -95,7 +109,6 @@ function App() {
       void audio().speak(item.word)
       setStreak(0)
       setScore((value) => Math.max(0, value - 2))
-      setAnswerReveal('hidden')
       setFeedback({ tone: 'try', text: '还不是这张图。再听一次，只看图片再选。' })
       audio().play('wrong')
       window.setTimeout(() => void audio().speak(target.word), 360)
@@ -105,7 +118,6 @@ function App() {
   function changeCategory(categoryId: CategoryId) {
     startAudio()
     setActiveCategory(categoryId)
-    setRound(1)
     engineRef.current.reset(categoryId)
     audio().play('next')
     window.setTimeout(() => newRound(categoryId, true), 0)
@@ -113,23 +125,40 @@ function App() {
 
   function replayTarget() {
     startAudio()
-    void audio().speak(target.word)
+    speakSnapshot(target, answerReveal)
+  }
+
+  function goToPreviousRound() {
+    if (!canGoPrevious(history)) return
+    startAudio()
+    const previousHistory = movePrevious(history)
+    setHistory(previousHistory)
+    setCurrentFeedback(previousHistory.current.answerReveal)
+    speakSnapshot(previousHistory.current.target, previousHistory.current.answerReveal)
   }
 
   function goToNextRound() {
     startAudio()
-    setRound((value) => value + 1)
+
+    if (canGoNext(history)) {
+      const nextHistory = moveNext(history)
+      setHistory(nextHistory)
+      setCurrentFeedback(nextHistory.current.answerReveal)
+      speakSnapshot(nextHistory.current.target, nextHistory.current.answerReveal)
+      return
+    }
+
     const nextTarget = engineRef.current.next()
-    setAnswerReveal('hidden')
-    setTarget(nextTarget)
-    setChoices(buildChoices(vocabulary, nextTarget))
-    setLocked(false)
+    setHistory(appendRound(history, { target: nextTarget, choices: buildChoices(vocabulary, nextTarget), answerReveal: 'hidden' }))
     setFeedback({ tone: 'idle', text: '听读音，选择正确图片。' })
     void audio().speak(nextTarget.word)
   }
 
+  const { target, choices, answerReveal } = history.current
+  const round = history.index + 1
   const progress = Math.min(100, Math.round((new Set([target.word, ...choices.map((item) => item.word)]).size / vocabulary.length) * 100))
   const answerVisibility = getAnswerVisibility(answerReveal)
+  const hasPreviousRound = canGoPrevious(history)
 
   return (
     <main className="app-shell" aria-label="儿童看图学英语升级版">
@@ -164,11 +193,18 @@ function App() {
 
         <div className={`feedback ${feedback.tone}`}>{feedback.text}</div>
 
-        {answerVisibility.nextButton ? (
-          <button className="next-button" type="button" onClick={goToNextRound}>
-            下一题
-          </button>
-        ) : null}
+        <div className="round-actions" aria-label="题目切换">
+          {hasPreviousRound ? (
+            <button className="previous-button" type="button" onClick={goToPreviousRound}>
+              上一题
+            </button>
+          ) : null}
+          {answerVisibility.nextButton ? (
+            <button className="next-button" type="button" onClick={goToNextRound}>
+              下一题
+            </button>
+          ) : null}
+        </div>
 
         <div className="choice-grid" aria-label="图片选项">
           {choices.map((item, index) => (
@@ -177,7 +213,7 @@ function App() {
               type="button"
               key={item.word}
               onClick={() => chooseCard(item)}
-              disabled={locked}
+              disabled={answerReveal === 'revealed'}
               aria-label={answerVisibility.cardEnglish ? `${item.word}, ${item.meaning}` : `${item.meaning}, 图片选项 ${index + 1}`}
             >
               <span className="picture" role="img" aria-label={item.meaning}>

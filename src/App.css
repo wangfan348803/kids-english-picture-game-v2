@@ -145,7 +145,8 @@ h2 {
 }
 
 .feedback,
-.next-button {
+.next-button,
+.previous-button {
   min-height: 44px;
   display: grid;
   place-items: center;
@@ -158,11 +159,25 @@ h2 {
   text-align: center;
 }
 
+.round-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 10px;
+}
+
 .next-button {
   border: 0;
   color: #fff;
   background: linear-gradient(135deg, #69d7b1, #78c8ff);
   box-shadow: 0 16px 28px rgba(105, 215, 177, 0.22);
+  cursor: pointer;
+}
+
+.previous-button {
+  border: 0;
+  color: #25304e;
+  background: #edf7ff;
+  box-shadow: 0 12px 22px rgba(120, 200, 255, 0.16);
   cursor: pointer;
 }
 
