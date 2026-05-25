@@ -27,6 +27,7 @@ const patterns: Record<SoundKind, Tone[]> = {
 export class GameAudio {
   private context: AudioContext | null = null
   private gain: GainNode | null = null
+  private htmlAudioSources = new Map<SoundKind, string>()
   private speechAttempt = 0
   private voicesReady: Promise<SpeechSynthesisVoice[]> | null = null
   private getVolume: () => number
@@ -60,8 +61,18 @@ export class GameAudio {
 
   play(kind: SoundKind) {
     if (this.isMuted()) return
+    if (this.shouldUseHtmlAudio()) {
+      this.playHtmlAudio(kind)
+      this.vibrate(kind)
+      return
+    }
+
     this.start()
-    if (!this.context) return
+    if (!this.context || this.context.state !== 'running') {
+      this.playHtmlAudio(kind)
+      this.vibrate(kind)
+      return
+    }
 
     const now = this.context.currentTime
     for (const [frequency, delay, duration, type, gain] of patterns[kind]) {
@@ -76,6 +87,38 @@ export class GameAudio {
       oscillator.start(now + delay)
       oscillator.stop(now + delay + duration + 0.02)
     }
+  }
+
+  private shouldUseHtmlAudio() {
+    if (typeof navigator === 'undefined') return false
+    return /MicroMessenger|iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+  }
+
+  private playHtmlAudio(kind: SoundKind) {
+    if (typeof Audio === 'undefined') return
+
+    const source = this.getHtmlAudioSource(kind)
+    if (!source) return
+
+    const player = new Audio(source)
+    player.volume = Math.max(0, Math.min(100, this.getVolume())) / 100
+    player.currentTime = 0
+    void player.play().catch(() => undefined)
+  }
+
+  private getHtmlAudioSource(kind: SoundKind) {
+    const cached = this.htmlAudioSources.get(kind)
+    if (cached) return cached
+    if (typeof Blob === 'undefined' || typeof URL === 'undefined' || !URL.createObjectURL) return null
+
+    const source = URL.createObjectURL(new Blob([createWavBytes(patterns[kind])], { type: 'audio/wav' }))
+    this.htmlAudioSources.set(kind, source)
+    return source
+  }
+
+  private vibrate(kind: SoundKind) {
+    if (kind !== 'wrong' || typeof navigator === 'undefined' || !navigator.vibrate) return
+    navigator.vibrate(60)
   }
 
   async speak(word: string) {
@@ -152,5 +195,58 @@ export class GameAudio {
     })
 
     return this.voicesReady
+  }
+}
+
+function createWavBytes(tones: Tone[]) {
+  const sampleRate = 22050
+  const totalSeconds = Math.max(...tones.map(([, delay, duration]) => delay + duration), 0.08) + 0.04
+  const sampleCount = Math.ceil(sampleRate * totalSeconds)
+  const dataSize = sampleCount * 2
+  const buffer = new ArrayBuffer(44 + dataSize)
+  const view = new DataView(buffer)
+
+  writeAscii(view, 0, 'RIFF')
+  view.setUint32(4, 36 + dataSize, true)
+  writeAscii(view, 8, 'WAVE')
+  writeAscii(view, 12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true)
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * 2, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
+  writeAscii(view, 36, 'data')
+  view.setUint32(40, dataSize, true)
+
+  for (let index = 0; index < sampleCount; index += 1) {
+    const time = index / sampleRate
+    const sample = tones.reduce((sum, [frequency, delay, duration, type, gain]) => {
+      const localTime = time - delay
+      if (localTime < 0 || localTime > duration) return sum
+
+      const phase = (localTime * frequency) % 1
+      const wave = waveSample(phase, type)
+      const fadeIn = Math.min(1, localTime / 0.012)
+      const fadeOut = Math.min(1, (duration - localTime) / 0.035)
+      return sum + wave * gain * fadeIn * fadeOut
+    }, 0)
+
+    view.setInt16(44 + index * 2, Math.max(-1, Math.min(1, sample)) * 0x7fff, true)
+  }
+
+  return buffer
+}
+
+function waveSample(phase: number, type: OscillatorType) {
+  if (type === 'triangle') return 1 - 4 * Math.abs(Math.round(phase - 0.25) - (phase - 0.25))
+  if (type === 'sawtooth') return 2 * phase - 1
+  return Math.sin(phase * Math.PI * 2)
+}
+
+function writeAscii(view: DataView, offset: number, text: string) {
+  for (let index = 0; index < text.length; index += 1) {
+    view.setUint8(offset + index, text.charCodeAt(index))
   }
 }

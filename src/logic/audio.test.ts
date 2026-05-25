@@ -9,6 +9,9 @@ type SpokenUtterance = SpeechSynthesisUtterance & {
 
 const spoken: SpokenUtterance[] = []
 const cancel = vi.fn()
+const audioPlay = vi.fn(() => Promise.resolve())
+const vibrate = vi.fn()
+const createdAudioSources: string[] = []
 
 class FakeSpeechSynthesisUtterance {
   text: string
@@ -28,9 +31,29 @@ describe('GameAudio speech', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     spoken.length = 0
+    createdAudioSources.length = 0
     cancel.mockClear()
+    audioPlay.mockClear()
+    vibrate.mockClear()
 
     vi.stubGlobal('SpeechSynthesisUtterance', FakeSpeechSynthesisUtterance)
+    vi.stubGlobal(
+      'Audio',
+      class FakeAudio {
+        volume = 1
+        currentTime = 0
+
+        constructor(src: string) {
+          createdAudioSources.push(src)
+        }
+
+        play = audioPlay
+      },
+    )
+    vi.stubGlobal('navigator', {
+      userAgent: 'Mozilla/5.0 MicroMessenger iPhone',
+      vibrate,
+    })
     vi.stubGlobal('speechSynthesis', {
       cancel,
       getVoices: () => [
@@ -67,5 +90,15 @@ describe('GameAudio speech', () => {
     expect(spoken).toHaveLength(2)
     expect(spoken[1].text).toBe('猫')
     expect(spoken[1].lang).toBe('zh-CN')
+  })
+
+  it('uses an HTMLAudio fallback for mobile WeChat sound effects', () => {
+    const audio = new GameAudio(() => 80, () => false)
+
+    audio.play('wrong')
+
+    expect(createdAudioSources).toHaveLength(1)
+    expect(audioPlay).toHaveBeenCalledTimes(1)
+    expect(vibrate).toHaveBeenCalledWith(60)
   })
 })
