@@ -407,13 +407,13 @@ h2.prompt-text {
 .learning-stat-row span,
 .difficult-list > span {
   color: #6e789b;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 950;
 }
 
 .learning-stat-row strong {
   color: #24304f;
-  font-size: 20px;
+  font-size: 24px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
@@ -429,7 +429,7 @@ h2.prompt-text {
 
 .difficult-list em {
   color: #7b86a8;
-  font-size: 12px;
+  font-size: 14px;
   font-style: normal;
   font-weight: 850;
 }
@@ -443,7 +443,7 @@ h2.prompt-text {
   border-radius: 999px;
   color: #55380b;
   background: #fff2b0;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 950;
 }
 
@@ -453,12 +453,12 @@ h2.prompt-text {
 }
 
 .category {
-  min-height: 27px;
+  min-height: 31px;
   border-radius: 12px;
-  padding: 4px 8px;
+  padding: 5px 9px;
   color: #44506f;
   background: rgba(255, 255, 255, 0.72);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 950;
   text-align: left;
 }
