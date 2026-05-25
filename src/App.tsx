@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { categories, type CategoryId, vocabulary, type VocabularyItem } from './data/vocabulary'
 import { getAnswerAudioPlan, getRevealedChoiceAudioPlan } from './logic/answerAudio'
@@ -15,14 +15,12 @@ import {
 } from './logic/learningApi'
 import { type AnswerRevealState, getAnswerVisibility } from './logic/reveal'
 import { readInitialVolume } from './logic/preferences'
-import { createRoundEngine, scoreCorrectAnswer, wordsForCategory } from './logic/round'
+import { createRoundEngine, scoreCorrectAnswer } from './logic/round'
 
 type Feedback = {
   tone: 'idle' | 'good' | 'try'
   text: string
 }
-
-type CloudStatus = 'idle' | 'saving' | 'saved' | 'offline'
 
 const firstCategory: CategoryId = 'All'
 const firstMode: LearningMode = 'words'
@@ -58,14 +56,12 @@ function App() {
   const [score, setScore] = useState(0)
   const [streak, setStreak] = useState(0)
   const [best, setBest] = useState(() => Number(localStorage.getItem('kid-word-v2-best') || 0))
-  const [muted, setMuted] = useState(() => localStorage.getItem('kid-word-v2-muted') === 'true')
-  const [volume, setVolume] = useState(() => readInitialVolume(localStorage.getItem('kid-word-v2-volume')))
+  const [muted] = useState(() => localStorage.getItem('kid-word-v2-muted') === 'true')
+  const [volume] = useState(() => readInitialVolume(localStorage.getItem('kid-word-v2-volume')))
   const [started, setStarted] = useState(false)
   const [feedback, setFeedback] = useState<Feedback>({ tone: 'idle', text: '点击开始学习，听单词，选图片。' })
-  const [cloudStatus, setCloudStatus] = useState<CloudStatus>('idle')
   const [learningProgress, setLearningProgress] = useState<LearningProgress>(initialProgress)
 
-  const categoryWords = useMemo(() => wordsForCategory(vocabulary, activeCategory), [activeCategory])
   const [playerId] = useState(() => getOrCreatePlayerId())
   const engineRef = useRef(initialSession.engine)
   const sessionIdRef = useRef(createLearningSessionId())
@@ -153,7 +149,6 @@ function App() {
   }
 
   function recordAnswer(item: LearningItem, isCorrect: boolean, nextScore: number, nextStreak: number, points: number) {
-    setCloudStatus('saving')
     void saveAnswerRecord({
       playerId,
       sessionId: sessionIdRef.current,
@@ -168,7 +163,6 @@ function App() {
       points,
       responseMs: currentTimeMs() - roundStartedAtRef.current,
     }).then((result) => {
-      setCloudStatus(result.ok ? 'saved' : 'offline')
       if (result.ok) refreshLearningProgress()
     })
   }
@@ -280,8 +274,6 @@ function App() {
   }
 
   const { target, choices, answerReveal } = history.current
-  const round = history.index + 1
-  const progress = Math.min(100, Math.round((new Set([target.sourceWord, ...choices.map((item) => item.sourceWord)]).size / vocabulary.length) * 100))
   const answerVisibility = getAnswerVisibility(answerReveal)
   const hasPreviousRound = canGoPrevious(history)
   const accuracyText = learningProgress.summary.totalAnswers > 0 ? `${learningProgress.summary.accuracy}%` : '--'
@@ -379,14 +371,7 @@ function App() {
       </section>
 
       <aside className="side-panel" aria-label="学习控制">
-        <div className="score-grid">
-          <Metric label="得分" value={score} />
-          <Metric label="连对" value={streak} />
-          <Metric label="回合" value={round} />
-          <Metric label="最佳" value={best} />
-          <Metric label="词汇" value={vocabulary.length} />
-          <Metric label="本类" value={categoryWords.length} />
-        </div>
+        <Metric label="词汇" value={vocabulary.length} variant="wide" />
 
         <LearningStatsPanel progress={learningProgress} />
 
@@ -410,38 +395,15 @@ function App() {
           <button className="soft-button review" type="button" onClick={reviewDifficultWords} disabled={!hasDifficultWords}>
             复习错词
           </button>
-          <button className="soft-button alt" type="button" onClick={() => setMuted((value) => !value)}>
-            {muted ? '🔇 声音关' : '🔊 声音开'}
-          </button>
-          <label className="volume-row">
-            <span>音量</span>
-            <input type="range" min="0" max="100" value={volume} onChange={(event) => setVolume(Number(event.target.value))} />
-            <strong>{volume}%</strong>
-          </label>
-        </div>
-
-        <div className="progress-box">
-          <span className={`sync-status ${cloudStatus}`}>{cloudStatusLabel[cloudStatus]}</span>
-          <span>本轮识别度</span>
-          <div className="progress-track">
-            <i style={{ width: `${progress}%` }} />
-          </div>
         </div>
       </aside>
     </main>
   )
 }
 
-const cloudStatusLabel: Record<CloudStatus, string> = {
-  idle: '云端记录待开始',
-  saving: '云端保存中...',
-  saved: '云端已保存',
-  offline: '本地模式，未写入云端',
-}
-
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({ label, value, variant }: { label: string; value: number; variant?: 'wide' }) {
   return (
-    <div className="metric">
+    <div className={variant === 'wide' ? 'metric metric-wide' : 'metric'}>
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
