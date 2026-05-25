@@ -499,93 +499,172 @@ h2.prompt-text {
 
 @media (max-width: 620px) {
   .app-shell {
-    width: min(100vw - 18px, 430px);
-    grid-template-rows: auto auto;
-    gap: 10px;
+    width: min(100vw - 12px, 430px);
+    height: calc(100dvh - 12px);
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 8px;
   }
 
   .hero-panel,
   .game-panel,
   .side-panel {
-    border-radius: 22px;
+    border-radius: 20px;
   }
 
   .hero-panel {
     align-items: stretch;
     flex-direction: column;
-    padding: 16px;
+    gap: 8px;
+    padding: 10px 12px;
   }
 
   .hero-actions {
     min-width: 0;
+    gap: 7px;
   }
 
   .mode-tabs {
     order: 2;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 14px;
+  }
+
+  .mode-tab {
+    min-height: 28px;
+    border-radius: 10px;
+    font-size: 12px;
   }
 
   .bear-mark {
-    width: 52px;
-    height: 52px;
-    font-size: 30px;
+    width: 44px;
+    height: 44px;
+    border-radius: 16px;
+    font-size: 26px;
+  }
+
+  .brand-row {
+    gap: 10px;
   }
 
   h1 {
-    font-size: 30px;
+    font-size: 27px;
+  }
+
+  .hero-panel p {
+    margin-top: 3px;
+    font-size: 13px;
+    line-height: 1.25;
   }
 
   .start-button {
     width: 100%;
+    min-height: 42px;
+    border-radius: 15px;
+    font-size: 15px;
   }
 
   .game-panel {
-    padding: 14px;
-    gap: 10px;
+    min-height: 0;
+    overflow: hidden;
+    align-content: stretch;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    padding: 10px;
+    gap: 7px;
   }
 
   .game-topline {
     min-height: 0;
-    padding: 15px;
+    padding: 11px 12px;
+    border-radius: 18px;
     grid-template-columns: 1fr auto;
+    gap: 10px;
+  }
+
+  .section-label {
+    margin-bottom: 4px;
+    font-size: 13px;
   }
 
   h2 {
-    font-size: clamp(44px, 16vw, 64px);
+    font-size: clamp(38px, 14vw, 54px);
   }
 
   h2.prompt-text {
-    font-size: clamp(28px, 9vw, 42px);
+    font-size: clamp(25px, 8vw, 36px);
+  }
+
+  .game-topline p,
+  .target-meaning.revealed {
+    margin-top: 6px;
+    font-size: 18px;
+  }
+
+  .target-meaning {
+    min-height: 24px;
+    font-size: 15px;
   }
 
   .speaker-button {
-    width: 64px;
-    height: 64px;
-    border-radius: 21px;
-    font-size: 30px;
+    width: 58px;
+    height: 58px;
+    border-radius: 19px;
+    font-size: 27px;
+  }
+
+  .feedback,
+  .next-button,
+  .previous-button {
+    min-height: 36px;
+    padding: 6px 10px;
+    border-radius: 13px;
+    font-size: 14px;
+    line-height: 1.2;
+  }
+
+  .round-actions {
+    gap: 7px;
   }
 
   .choice-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    gap: 8px;
+    min-height: 0;
   }
 
   .word-card {
-    min-height: 154px;
-    border-radius: 20px;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr) auto auto;
+    gap: 5px;
+    padding: 10px;
+    border-radius: 18px;
   }
 
   .picture {
-    width: min(82px, 64%);
-    font-size: clamp(38px, 14vw, 58px);
+    width: min(66px, 58%);
+    border-radius: 22px;
+    font-size: clamp(32px, 11vw, 48px);
   }
 
   .text-choice {
-    min-height: 66px;
-    font-size: clamp(30px, 10vw, 44px);
+    min-width: min(116px, 82%);
+    min-height: 54px;
+    border-radius: 20px;
+    font-size: clamp(28px, 9vw, 40px);
   }
 
   .word-card strong {
-    font-size: 21px;
+    font-size: 19px;
+  }
+
+  .card-meaning {
+    min-height: 30px;
+    font-size: 16px;
+  }
+
+  .card-meaning.revealed {
+    font-size: 14px;
   }
 
   .side-panel {
