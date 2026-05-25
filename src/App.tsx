@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { categories, type CategoryId, vocabulary, type VocabularyItem } from './data/vocabulary'
+import { getAnswerAudioPlan } from './logic/answerAudio'
 import { GameAudio } from './logic/audio'
 import { appendRound, canGoNext, canGoPrevious, createRoundHistory, moveNext, movePrevious, replaceCurrentRound } from './logic/history'
 import { type AnswerRevealState, getAnswerVisibility } from './logic/reveal'
@@ -92,8 +93,9 @@ function App() {
   function chooseCard(item: VocabularyItem) {
     if (answerReveal === 'revealed') return
     startAudio()
+    const isCorrect = item.word === target.word
 
-    if (item.word === target.word) {
+    if (isCorrect) {
       const nextStreak = streak + 1
       const gained = scoreCorrectAnswer(streak)
       const nextScore = score + gained
@@ -102,15 +104,18 @@ function App() {
       setScore(nextScore)
       setBest(Math.max(best, nextScore))
       setFeedback({ tone: 'good', text: `Great! ${item.word} 是「${item.meaning}」。+${gained}，点击下一题继续。` })
-      audio().play(nextStreak > 0 && nextStreak % 5 === 0 ? 'bonus' : 'correct')
-      window.setTimeout(() => void audio().speakAnswer(item.word, item.meaning), 360)
+      const audioPlan = getAnswerAudioPlan(true, item.word, item.meaning, nextStreak > 0 && nextStreak % 5 === 0 ? 'bonus' : 'correct')
+      audioPlan.forEach((action) => {
+        if (action.type === 'sound') audio().play(action.kind)
+        if (action.type === 'answerSpeech') window.setTimeout(() => void audio().speakAnswer(action.word, action.meaning), 360)
+      })
     } else {
-      void audio().speak(item.word)
       setStreak(0)
       setScore((value) => Math.max(0, value - 2))
       setFeedback({ tone: 'try', text: '还不是这张图。再听一次，只看图片再选。' })
-      audio().play('wrong')
-      window.setTimeout(() => void audio().speak(target.word), 360)
+      getAnswerAudioPlan(false, item.word, item.meaning).forEach((action) => {
+        if (action.type === 'sound') audio().play(action.kind)
+      })
     }
   }
 
