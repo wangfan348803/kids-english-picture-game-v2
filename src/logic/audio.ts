@@ -126,26 +126,27 @@ export class GameAudio {
     this.start()
     this.play('tap')
 
-    await this.speakSequence([{ text: word, lang: 'en-US', voice: this.pickEnglishVoice.bind(this) }])
+    this.speakSequence([{ text: word, lang: 'en-US', voice: this.pickEnglishVoice.bind(this) }])
   }
 
   async speakAnswer(word: string, meaning: string) {
     if (this.isMuted() || !window.speechSynthesis) return
     this.start()
 
-    await this.speakSequence([
+    this.speakSequence([
       { text: word, lang: 'en-US', voice: this.pickEnglishVoice.bind(this) },
       { text: meaning, lang: 'zh-CN', voice: this.pickChineseVoice.bind(this) },
     ])
   }
 
-  private async speakSequence(parts: Array<{ text: string; lang: string; voice: () => SpeechSynthesisVoice | undefined }>) {
+  private speakSequence(parts: Array<{ text: string; lang: string; voice: () => SpeechSynthesisVoice | undefined }>) {
     const attempt = ++this.speechAttempt
-    await this.waitForVoices()
-    if (attempt !== this.speechAttempt || this.isMuted()) return
+    this.waitForVoices()
 
+    speechSynthesis.resume?.()
     speechSynthesis.cancel()
-    window.setTimeout(() => {
+
+    const run = () => {
       if (attempt !== this.speechAttempt || this.isMuted()) return
       const speakPart = (index: number) => {
         const part = parts[index]
@@ -163,7 +164,14 @@ export class GameAudio {
       }
 
       speakPart(0)
-    }, 70)
+    }
+
+    if (this.isMobileBrowser()) {
+      run()
+      return
+    }
+
+    window.setTimeout(run, 70)
   }
 
   private pickEnglishVoice() {
@@ -195,6 +203,11 @@ export class GameAudio {
     })
 
     return this.voicesReady
+  }
+
+  private isMobileBrowser() {
+    if (typeof navigator === 'undefined') return false
+    return /MicroMessenger|iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
   }
 }
 

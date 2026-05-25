@@ -101,4 +101,25 @@ describe('GameAudio speech', () => {
     expect(audioPlay).toHaveBeenCalledTimes(1)
     expect(vibrate).toHaveBeenCalledWith(60)
   })
+
+  it('speaks immediately on mobile even before voices are ready', () => {
+    vi.stubGlobal('speechSynthesis', {
+      cancel,
+      getVoices: () => [],
+      speak: (utterance: SpokenUtterance) => spoken.push(utterance),
+    })
+    vi.stubGlobal('window', {
+      speechSynthesis,
+      setTimeout,
+    })
+
+    const audio = new GameAudio(() => 80, () => false)
+
+    void audio.speak('colorful')
+
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(spoken).toHaveLength(1)
+    expect(spoken[0].text).toBe('colorful')
+    expect(spoken[0].lang).toBe('en-US')
+  })
 })
