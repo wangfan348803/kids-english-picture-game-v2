@@ -62,6 +62,12 @@ h1 {
   font-weight: 750;
 }
 
+.hero-progress {
+  margin-left: 10px;
+  color: #2f8b72;
+  font-weight: 950;
+}
+
 .hero-actions {
   min-width: 230px;
   display: grid;
@@ -367,6 +373,71 @@ h2.prompt-text {
   gap: 6px;
 }
 
+.learning-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  padding: 9px;
+  border-radius: 17px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.learning-stat-row {
+  min-height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: #f0fbff;
+}
+
+.learning-stat-row span,
+.difficult-list > span {
+  color: #6e789b;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.learning-stat-row strong {
+  color: #24304f;
+  font-size: 20px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.difficult-list {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+}
+
+.difficult-list em {
+  color: #7b86a8;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.difficult-chip {
+  min-height: 25px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #55380b;
+  background: #fff2b0;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.difficult-chip b {
+  color: #7b2143;
+  font-variant-numeric: tabular-nums;
+}
+
 .category {
   min-height: 29px;
   border-radius: 12px;
@@ -402,6 +473,11 @@ h2.prompt-text {
   grid-column: 1 / -1;
   color: #55380b;
   background: linear-gradient(135deg, #ffe16a, #ffbf73);
+}
+
+.soft-button.review:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
 }
 
 .volume-row {
@@ -556,6 +632,12 @@ h2.prompt-text {
     margin-top: 3px;
     font-size: 13px;
     line-height: 1.25;
+  }
+
+  .hero-progress {
+    display: inline;
+    margin-left: 6px;
+    white-space: nowrap;
   }
 
   .start-button {

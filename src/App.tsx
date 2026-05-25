@@ -1,11 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { categories, type CategoryId, vocabulary, type VocabularyItem } from './data/vocabulary'
 import { getAnswerAudioPlan, getRevealedChoiceAudioPlan } from './logic/answerAudio'
 import { GameAudio } from './logic/audio'
 import { buildLearningChoices, createLearningItem, getModeFeedback, learningModeMeta, type LearningItem, type LearningMode } from './logic/content'
 import { appendRound, canGoNext, canGoPrevious, createRoundHistory, moveNext, movePrevious, replaceCurrentRound } from './logic/history'
-import { createLearningSessionId, getOrCreatePlayerId, saveAnswerRecord } from './logic/learningApi'
+import {
+  createLearningSessionId,
+  fetchLearningProgress,
+  getOrCreatePlayerId,
+  saveAnswerRecord,
+  type DifficultWord,
+  type LearningProgress,
+} from './logic/learningApi'
 import { type AnswerRevealState, getAnswerVisibility } from './logic/reveal'
 import { readInitialVolume } from './logic/preferences'
 import { createRoundEngine, scoreCorrectAnswer, wordsForCategory } from './logic/round'
@@ -19,6 +26,17 @@ type CloudStatus = 'idle' | 'saving' | 'saved' | 'offline'
 
 const firstCategory: CategoryId = 'All'
 const firstMode: LearningMode = 'words'
+const initialProgress: LearningProgress = {
+  ok: false,
+  summary: {
+    seenWords: 0,
+    correctCount: 0,
+    wrongCount: 0,
+    totalAnswers: 0,
+    accuracy: 0,
+  },
+  difficultWords: [],
+}
 
 function currentTimeMs() {
   return Date.now()
@@ -45,6 +63,7 @@ function App() {
   const [started, setStarted] = useState(false)
   const [feedback, setFeedback] = useState<Feedback>({ tone: 'idle', text: '点击开始学习，听单词，选图片。' })
   const [cloudStatus, setCloudStatus] = useState<CloudStatus>('idle')
+  const [learningProgress, setLearningProgress] = useState<LearningProgress>(initialProgress)
 
   const categoryWords = useMemo(() => wordsForCategory(vocabulary, activeCategory), [activeCategory])
   const [playerId] = useState(() => getOrCreatePlayerId())
@@ -54,6 +73,12 @@ function App() {
   const mutedRef = useRef(muted)
   const volumeRef = useRef(volume)
   const audioRef = useRef<GameAudio | null>(null)
+
+  const refreshLearningProgress = useCallback(() => {
+    void fetchLearningProgress(playerId).then((progress) => {
+      setLearningProgress(progress)
+    })
+  }, [playerId])
 
   useEffect(() => {
     mutedRef.current = muted
@@ -69,6 +94,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem('kid-word-v2-best', String(best))
   }, [best])
+
+  useEffect(() => {
+    refreshLearningProgress()
+  }, [refreshLearningProgress])
 
   function audio() {
     audioRef.current ??= new GameAudio(() => volumeRef.current, () => mutedRef.current)
@@ -140,6 +169,7 @@ function App() {
       responseMs: currentTimeMs() - roundStartedAtRef.current,
     }).then((result) => {
       setCloudStatus(result.ok ? 'saved' : 'offline')
+      if (result.ok) refreshLearningProgress()
     })
   }
 
@@ -196,6 +226,26 @@ function App() {
     window.setTimeout(() => newRound(activeCategory, true, true, mode), 0)
   }
 
+  function reviewDifficultWords() {
+    const reviewVocabulary = learningProgress.difficultWords
+      .map((word) => vocabulary.find((item) => item.word === word.word))
+      .filter((item): item is VocabularyItem => Boolean(item))
+
+    if (reviewVocabulary.length === 0) {
+      setFeedback({ tone: 'idle', text: '还没有错词记录，先完成几题再来复习。' })
+      return
+    }
+
+    startAudio()
+    engineRef.current = createRoundEngine(reviewVocabulary, 'All')
+    const nextTarget = engineRef.current.next()
+    markRoundStarted()
+    const snapshot = buildRoundSnapshot(nextTarget, activeMode)
+    setHistory(createRoundHistory(snapshot))
+    setFeedback({ tone: 'idle', text: '开始复习错词，听读音再选择。' })
+    void audio().speak(snapshot.target.speechText)
+  }
+
   function replayTarget() {
     startAudio()
     speakSnapshot(target, answerReveal)
@@ -234,6 +284,8 @@ function App() {
   const progress = Math.min(100, Math.round((new Set([target.sourceWord, ...choices.map((item) => item.sourceWord)]).size / vocabulary.length) * 100))
   const answerVisibility = getAnswerVisibility(answerReveal)
   const hasPreviousRound = canGoPrevious(history)
+  const accuracyText = learningProgress.summary.totalAnswers > 0 ? `${learningProgress.summary.accuracy}%` : '--'
+  const hasDifficultWords = learningProgress.difficultWords.length > 0
 
   return (
     <main className="app-shell" aria-label="儿童看图学英语升级版">
@@ -244,7 +296,12 @@ function App() {
           </div>
           <div>
             <h1>看图学英语 V2</h1>
-            <p>{learningModeMeta[activeMode].hint}</p>
+            <p>
+              {learningModeMeta[activeMode].hint}
+              <span className="hero-progress">
+                已学 {learningProgress.summary.seenWords} · 正确率 {accuracyText}
+              </span>
+            </p>
           </div>
         </div>
         <div className="hero-actions">
@@ -331,6 +388,8 @@ function App() {
           <Metric label="本类" value={categoryWords.length} />
         </div>
 
+        <LearningStatsPanel progress={learningProgress} />
+
         <div className="category-grid" aria-label="词汇分类">
           {categories.map((category) => (
             <button
@@ -347,6 +406,9 @@ function App() {
         <div className="sound-panel">
           <button className="soft-button" type="button" onClick={() => newRound(activeCategory, started)}>
             换一组单词
+          </button>
+          <button className="soft-button review" type="button" onClick={reviewDifficultWords} disabled={!hasDifficultWords}>
+            复习错词
           </button>
           <button className="soft-button alt" type="button" onClick={() => setMuted((value) => !value)}>
             {muted ? '🔇 声音关' : '🔊 声音开'}
@@ -383,6 +445,43 @@ function Metric({ label, value }: { label: string; value: number }) {
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
+  )
+}
+
+function LearningStatsPanel({ progress }: { progress: LearningProgress }) {
+  const accuracyText = progress.summary.totalAnswers > 0 ? `${progress.summary.accuracy}%` : '--'
+
+  return (
+    <section className="learning-stats" aria-label="学习统计">
+      <div className="learning-stat-row">
+        <span>已学</span>
+        <strong>{progress.summary.seenWords}</strong>
+      </div>
+      <div className="learning-stat-row">
+        <span>答题</span>
+        <strong>{progress.summary.totalAnswers}</strong>
+      </div>
+      <div className="learning-stat-row">
+        <span>正确率</span>
+        <strong>{accuracyText}</strong>
+      </div>
+      <div className="difficult-list">
+        <span>易错词</span>
+        {progress.difficultWords.length > 0 ? (
+          progress.difficultWords.slice(0, 5).map((word) => <DifficultWordChip key={word.word} word={word} />)
+        ) : (
+          <em>暂无错词</em>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function DifficultWordChip({ word }: { word: DifficultWord }) {
+  return (
+    <span className="difficult-chip">
+      {word.word} <b>{word.wrongCount}</b>
+    </span>
   )
 }
 
