@@ -176,12 +176,18 @@ export class GameAudio {
 
   private pickEnglishVoice() {
     const voices = speechSynthesis.getVoices()
-    return voices.find((voice) => /^en[-_](US|GB|AU|CA)/i.test(voice.lang)) ?? voices.find((voice) => /^en/i.test(voice.lang))
+    return bestVoice(
+      voices.filter((voice) => /^en/i.test(voice.lang)),
+      (voice) => (/^en[-_](US|GB|AU|CA)/i.test(voice.lang) ? 8 : 0) + voiceQualityScore(voice),
+    )
   }
 
   private pickChineseVoice() {
     const voices = speechSynthesis.getVoices()
-    return voices.find((voice) => /^zh[-_](CN|Hans)/i.test(voice.lang)) ?? voices.find((voice) => /^zh/i.test(voice.lang))
+    return bestVoice(
+      voices.filter((voice) => /^zh/i.test(voice.lang)),
+      (voice) => (/^zh[-_](CN|Hans)/i.test(voice.lang) ? 8 : 0) + voiceQualityScore(voice),
+    )
   }
 
   private waitForVoices() {
@@ -262,4 +268,19 @@ function writeAscii(view: DataView, offset: number, text: string) {
   for (let index = 0; index < text.length; index += 1) {
     view.setUint8(offset + index, text.charCodeAt(index))
   }
+}
+
+function bestVoice(voices: SpeechSynthesisVoice[], score: (voice: SpeechSynthesisVoice) => number) {
+  return voices
+    .map((voice, index) => ({ voice, index, score: score(voice) }))
+    .sort((left, right) => right.score - left.score || left.index - right.index)[0]?.voice
+}
+
+function voiceQualityScore(voice: SpeechSynthesisVoice) {
+  const name = voice.name.toLowerCase()
+  let score = 0
+  if (/natural|neural|premium|enhanced/.test(name)) score += 10
+  if (/aria|jenny|guy|samantha|google|microsoft|tingting|xiaoxiao|xiaoyi/.test(name)) score += 5
+  if (/compact|basic/.test(name)) score -= 4
+  return score
 }

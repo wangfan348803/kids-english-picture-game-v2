@@ -3,12 +3,12 @@ import './App.css'
 import { categories, type CategoryId, vocabulary, type VocabularyItem } from './data/vocabulary'
 import { getAnswerAudioPlan, getRevealedChoiceAudioPlan } from './logic/answerAudio'
 import { GameAudio } from './logic/audio'
+import { buildLearningChoices, createLearningItem, getModeFeedback, learningModeMeta, type LearningItem, type LearningMode } from './logic/content'
 import { appendRound, canGoNext, canGoPrevious, createRoundHistory, moveNext, movePrevious, replaceCurrentRound } from './logic/history'
 import { createLearningSessionId, getOrCreatePlayerId, saveAnswerRecord } from './logic/learningApi'
 import { type AnswerRevealState, getAnswerVisibility } from './logic/reveal'
 import { readInitialVolume } from './logic/preferences'
-import { buildChoices, scoreCorrectAnswer, wordsForCategory } from './logic/round'
-import { createLearningSession } from './logic/session'
+import { createRoundEngine, scoreCorrectAnswer, wordsForCategory } from './logic/round'
 
 type Feedback = {
   tone: 'idle' | 'good' | 'try'
@@ -18,15 +18,25 @@ type Feedback = {
 type CloudStatus = 'idle' | 'saving' | 'saved' | 'offline'
 
 const firstCategory: CategoryId = 'All'
+const firstMode: LearningMode = 'words'
 
 function currentTimeMs() {
   return Date.now()
 }
 
 function App() {
-  const [session] = useState(() => createLearningSession(vocabulary, firstCategory))
+  const [initialSession] = useState(() => {
+    const engine = createRoundEngine(vocabulary, firstCategory)
+    const targetWord = engine.next()
+    const target = createLearningItem(targetWord, firstMode)
+    return {
+      engine,
+      history: createRoundHistory({ target, choices: buildLearningChoices(vocabulary, target, firstMode), answerReveal: 'hidden' }),
+    }
+  })
   const [activeCategory, setActiveCategory] = useState<CategoryId>(firstCategory)
-  const [history, setHistory] = useState(() => session.history)
+  const [activeMode, setActiveMode] = useState<LearningMode>(firstMode)
+  const [history, setHistory] = useState(() => initialSession.history)
   const [score, setScore] = useState(0)
   const [streak, setStreak] = useState(0)
   const [best, setBest] = useState(() => Number(localStorage.getItem('kid-word-v2-best') || 0))
@@ -38,7 +48,7 @@ function App() {
 
   const categoryWords = useMemo(() => wordsForCategory(vocabulary, activeCategory), [activeCategory])
   const [playerId] = useState(() => getOrCreatePlayerId())
-  const engineRef = useRef(session.engine)
+  const engineRef = useRef(initialSession.engine)
   const sessionIdRef = useRef(createLearningSessionId())
   const roundStartedAtRef = useRef(currentTimeMs())
   const mutedRef = useRef(muted)
@@ -70,50 +80,56 @@ function App() {
     audio().start()
   }
 
-  function speakSnapshot(target: VocabularyItem, answerReveal: AnswerRevealState) {
+  function speakSnapshot(target: LearningItem, answerReveal: AnswerRevealState) {
     if (answerReveal === 'revealed') {
-      void audio().speakAnswer(target.word, target.meaning)
+      void audio().speakAnswer(target.speechText, target.speechMeaning)
       return
     }
 
-    void audio().speak(target.word)
+    void audio().speak(target.speechText)
   }
 
   function setCurrentFeedback(answerReveal: AnswerRevealState) {
-    setFeedback({ tone: 'idle', text: answerReveal === 'revealed' ? '已揭晓答案，可以重听或进入下一题。' : '听读音，选择正确图片。' })
+    setFeedback({ tone: 'idle', text: answerReveal === 'revealed' ? '已揭晓答案，可以重听或进入下一题。' : learningModeMeta[activeMode].hint })
   }
 
   function markRoundStarted() {
     roundStartedAtRef.current = currentTimeMs()
   }
 
-  function newRound(nextCategory = activeCategory, shouldSpeak = started, resetEngine = false) {
+  function buildRoundSnapshot(targetWord: VocabularyItem, mode: LearningMode) {
+    const target = createLearningItem(targetWord, mode)
+    return { target, choices: buildLearningChoices(vocabulary, target, mode), answerReveal: 'hidden' as const }
+  }
+
+  function newRound(nextCategory = activeCategory, shouldSpeak = started, resetEngine = false, nextMode = activeMode) {
     if (resetEngine) engineRef.current.reset(nextCategory)
     const nextTarget = engineRef.current.next()
     markRoundStarted()
-    setHistory(createRoundHistory({ target: nextTarget, choices: buildChoices(vocabulary, nextTarget), answerReveal: 'hidden' }))
-    setFeedback({ tone: 'idle', text: shouldSpeak ? '听读音，选择正确图片。' : '准备好了就点击喇叭。' })
-    if (shouldSpeak) void audio().speak(nextTarget.word)
+    const snapshot = buildRoundSnapshot(nextTarget, nextMode)
+    setHistory(createRoundHistory(snapshot))
+    setFeedback({ tone: 'idle', text: getModeFeedback(nextMode, shouldSpeak) })
+    if (shouldSpeak) void audio().speak(snapshot.target.speechText)
   }
 
   function handleStart() {
     startAudio()
     if (answerReveal === 'revealed') {
-      void audio().speakAnswer(target.word, target.meaning)
+      void audio().speakAnswer(target.speechText, target.speechMeaning)
       return
     }
 
-    setFeedback({ tone: 'idle', text: '听读音，选择正确图片。' })
-    void audio().speak(target.word)
+    setFeedback({ tone: 'idle', text: learningModeMeta[activeMode].hint })
+    void audio().speak(target.speechText)
   }
 
-  function recordAnswer(item: VocabularyItem, isCorrect: boolean, nextScore: number, nextStreak: number, points: number) {
+  function recordAnswer(item: LearningItem, isCorrect: boolean, nextScore: number, nextStreak: number, points: number) {
     setCloudStatus('saving')
     void saveAnswerRecord({
       playerId,
       sessionId: sessionIdRef.current,
-      targetWord: target.word,
-      selectedWord: item.word,
+      targetWord: target.id,
+      selectedWord: item.answer,
       targetMeaning: target.meaning,
       selectedMeaning: item.meaning,
       category: target.category,
@@ -127,17 +143,17 @@ function App() {
     })
   }
 
-  function chooseCard(item: VocabularyItem) {
+  function chooseCard(item: LearningItem) {
     startAudio()
 
     if (answerReveal === 'revealed') {
-      getRevealedChoiceAudioPlan(item.word, item.meaning).forEach((action) => {
+      getRevealedChoiceAudioPlan(item.speechText, item.speechMeaning).forEach((action) => {
         if (action.type === 'answerSpeech') void audio().speakAnswer(action.word, action.meaning)
       })
       return
     }
 
-    const isCorrect = item.word === target.word
+    const isCorrect = item.answer === target.answer
 
     if (isCorrect) {
       const nextStreak = streak + 1
@@ -148,8 +164,8 @@ function App() {
       setScore(nextScore)
       setBest(Math.max(best, nextScore))
       recordAnswer(item, true, nextScore, nextStreak, gained)
-      setFeedback({ tone: 'good', text: `Great! ${item.word} 是「${item.meaning}」。+${gained}，点击下一题继续。` })
-      const audioPlan = getAnswerAudioPlan(true, item.word, item.meaning, nextStreak > 0 && nextStreak % 5 === 0 ? 'bonus' : 'correct')
+      setFeedback({ tone: 'good', text: `Great! ${target.answer} 是「${target.meaning}」。+${gained}，点击下一题继续。` })
+      const audioPlan = getAnswerAudioPlan(true, target.speechText, target.speechMeaning, nextStreak > 0 && nextStreak % 5 === 0 ? 'bonus' : 'correct')
       audioPlan.forEach((action) => {
         if (action.type === 'sound') audio().play(action.kind)
         if (action.type === 'answerSpeech') window.setTimeout(() => void audio().speakAnswer(action.word, action.meaning), 360)
@@ -160,7 +176,7 @@ function App() {
       setScore(nextScore)
       recordAnswer(item, false, nextScore, 0, -2)
       setFeedback({ tone: 'try', text: '还不是这张图。再听一次，只看图片再选。' })
-      getAnswerAudioPlan(false, item.word, item.meaning).forEach((action) => {
+      getAnswerAudioPlan(false, item.speechText, item.speechMeaning).forEach((action) => {
         if (action.type === 'sound') audio().play(action.kind)
       })
     }
@@ -170,7 +186,14 @@ function App() {
     startAudio()
     setActiveCategory(categoryId)
     audio().play('next')
-    window.setTimeout(() => newRound(categoryId, true, true), 0)
+    window.setTimeout(() => newRound(categoryId, true, true, activeMode), 0)
+  }
+
+  function changeMode(mode: LearningMode) {
+    startAudio()
+    setActiveMode(mode)
+    audio().play('next')
+    window.setTimeout(() => newRound(activeCategory, true, true, mode), 0)
   }
 
   function replayTarget() {
@@ -200,14 +223,15 @@ function App() {
 
     const nextTarget = engineRef.current.next()
     markRoundStarted()
-    setHistory(appendRound(history, { target: nextTarget, choices: buildChoices(vocabulary, nextTarget), answerReveal: 'hidden' }))
-    setFeedback({ tone: 'idle', text: '听读音，选择正确图片。' })
-    void audio().speak(nextTarget.word)
+    const snapshot = buildRoundSnapshot(nextTarget, activeMode)
+    setHistory(appendRound(history, snapshot))
+    setFeedback({ tone: 'idle', text: learningModeMeta[activeMode].hint })
+    void audio().speak(snapshot.target.speechText)
   }
 
   const { target, choices, answerReveal } = history.current
   const round = history.index + 1
-  const progress = Math.min(100, Math.round((new Set([target.word, ...choices.map((item) => item.word)]).size / vocabulary.length) * 100))
+  const progress = Math.min(100, Math.round((new Set([target.sourceWord, ...choices.map((item) => item.sourceWord)]).size / vocabulary.length) * 100))
   const answerVisibility = getAnswerVisibility(answerReveal)
   const hasPreviousRound = canGoPrevious(history)
 
@@ -220,19 +244,28 @@ function App() {
           </div>
           <div>
             <h1>看图学英语 V2</h1>
-            <p>先听发音，再选图片。默认从全部词库开始。</p>
+            <p>{learningModeMeta[activeMode].hint}</p>
           </div>
         </div>
-        <button className="start-button" type="button" onClick={handleStart}>
-          {started ? '再听一遍' : '开始学习'}
-        </button>
+        <div className="hero-actions">
+          <div className="mode-tabs" aria-label="学习模式">
+            {(Object.keys(learningModeMeta) as LearningMode[]).map((mode) => (
+              <button className={mode === activeMode ? 'mode-tab active' : 'mode-tab'} type="button" key={mode} onClick={() => changeMode(mode)}>
+                {learningModeMeta[mode].label}
+              </button>
+            ))}
+          </div>
+          <button className="start-button" type="button" onClick={handleStart}>
+            {started ? '再听一遍' : '开始学习'}
+          </button>
+        </div>
       </section>
 
       <section className="game-panel" aria-label="当前题目">
         <div className="game-topline">
           <div>
             <span className="section-label">{categories.find((category) => category.id === activeCategory)?.label}</span>
-            <h2>{target.word}</h2>
+            <h2 className={activeMode === 'words' ? undefined : 'prompt-text'}>{target.prompt}</h2>
             <p className={answerVisibility.targetMeaning ? 'target-meaning revealed' : 'target-meaning'} aria-live="polite">
               {answerVisibility.targetMeaning ? target.meaning : '答对后显示中文意思'}
             </p>
@@ -262,15 +295,27 @@ function App() {
             <button
               className={answerVisibility.cardEnglish ? 'word-card revealed' : 'word-card'}
               type="button"
-              key={item.word}
+              key={item.id}
               onClick={() => chooseCard(item)}
-              aria-label={answerVisibility.cardEnglish ? `${item.word}, ${item.meaning}` : `${item.meaning}, 图片选项 ${index + 1}`}
+              aria-label={
+                answerVisibility.cardEnglish
+                  ? `${item.answer}, ${item.cardMeaning}`
+                  : item.choiceStyle === 'text'
+                    ? `${item.answer}, 选项 ${index + 1}`
+                    : `${item.cardMeaning}, 图片选项 ${index + 1}`
+              }
             >
-              <span className="picture" role="img" aria-label={item.meaning}>
-                {item.picture}
+              {item.choiceStyle === 'text' ? (
+                <span className="text-choice">{item.answer}</span>
+              ) : (
+                <span className="picture" role="img" aria-label={item.cardMeaning}>
+                  {item.picture}
+                </span>
+              )}
+              {answerVisibility.cardEnglish && item.choiceStyle !== 'text' ? <strong>{item.answer}</strong> : null}
+              <span className={answerVisibility.cardEnglish ? 'card-meaning revealed' : 'card-meaning'}>
+                {item.choiceStyle === 'text' && !answerVisibility.cardEnglish ? '选项' : item.cardMeaning}
               </span>
-              {answerVisibility.cardEnglish ? <strong>{item.word}</strong> : null}
-              <span className={answerVisibility.cardEnglish ? 'card-meaning revealed' : 'card-meaning'}>{item.meaning}</span>
             </button>
           ))}
         </div>

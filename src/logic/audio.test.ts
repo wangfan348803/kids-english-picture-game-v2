@@ -122,4 +122,29 @@ describe('GameAudio speech', () => {
     expect(spoken[0].text).toBe('colorful')
     expect(spoken[0].lang).toBe('en-US')
   })
+
+  it('prefers natural-sounding English voices when available', async () => {
+    vi.stubGlobal('navigator', {
+      userAgent: 'Mozilla/5.0 Desktop',
+      vibrate,
+    })
+    vi.stubGlobal('speechSynthesis', {
+      cancel,
+      getVoices: () => [
+        { lang: 'en-US', name: 'Basic English' },
+        { lang: 'en-US', name: 'Microsoft Aria Natural' },
+      ],
+      speak: (utterance: SpokenUtterance) => spoken.push(utterance),
+    })
+    vi.stubGlobal('window', {
+      speechSynthesis,
+      setTimeout,
+    })
+    const audio = new GameAudio(() => 80, () => false)
+
+    void audio.speak('apple')
+    await vi.runAllTimersAsync()
+
+    expect(spoken[0].voice?.name).toBe('Microsoft Aria Natural')
+  })
 })
