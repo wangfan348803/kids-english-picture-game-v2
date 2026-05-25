@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getAnswerAudioPlan } from './answerAudio'
+import { getAnswerAudioPlan, getRevealedChoiceAudioPlan } from './answerAudio'
 
 describe('answer audio plan', () => {
   it('plays only the wrong sound when the learner chooses a wrong picture', () => {
@@ -11,5 +11,9 @@ describe('answer audio plan', () => {
       { type: 'sound', kind: 'correct' },
       { type: 'answerSpeech', word: 'cat', meaning: '猫' },
     ])
+  })
+
+  it('reads English then Chinese when a revealed choice card is tapped', () => {
+    expect(getRevealedChoiceAudioPlan('dog', '狗')).toEqual([{ type: 'answerSpeech', word: 'dog', meaning: '狗' }])
   })
 })

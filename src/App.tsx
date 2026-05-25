@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { categories, type CategoryId, vocabulary, type VocabularyItem } from './data/vocabulary'
-import { getAnswerAudioPlan } from './logic/answerAudio'
+import { getAnswerAudioPlan, getRevealedChoiceAudioPlan } from './logic/answerAudio'
 import { GameAudio } from './logic/audio'
 import { appendRound, canGoNext, canGoPrevious, createRoundHistory, moveNext, movePrevious, replaceCurrentRound } from './logic/history'
 import { type AnswerRevealState, getAnswerVisibility } from './logic/reveal'
+import { readInitialVolume } from './logic/preferences'
 import { buildChoices, scoreCorrectAnswer, wordsForCategory } from './logic/round'
 import { createLearningSession } from './logic/session'
 
@@ -23,7 +24,7 @@ function App() {
   const [streak, setStreak] = useState(0)
   const [best, setBest] = useState(() => Number(localStorage.getItem('kid-word-v2-best') || 0))
   const [muted, setMuted] = useState(() => localStorage.getItem('kid-word-v2-muted') === 'true')
-  const [volume, setVolume] = useState(() => Number(localStorage.getItem('kid-word-v2-volume') || 80))
+  const [volume, setVolume] = useState(() => readInitialVolume(localStorage.getItem('kid-word-v2-volume')))
   const [started, setStarted] = useState(false)
   const [feedback, setFeedback] = useState<Feedback>({ tone: 'idle', text: '点击开始学习，听单词，选图片。' })
 
@@ -91,8 +92,15 @@ function App() {
   }
 
   function chooseCard(item: VocabularyItem) {
-    if (answerReveal === 'revealed') return
     startAudio()
+
+    if (answerReveal === 'revealed') {
+      getRevealedChoiceAudioPlan(item.word, item.meaning).forEach((action) => {
+        if (action.type === 'answerSpeech') void audio().speakAnswer(action.word, action.meaning)
+      })
+      return
+    }
+
     const isCorrect = item.word === target.word
 
     if (isCorrect) {
@@ -216,7 +224,6 @@ function App() {
               type="button"
               key={item.word}
               onClick={() => chooseCard(item)}
-              disabled={answerReveal === 'revealed'}
               aria-label={answerVisibility.cardEnglish ? `${item.word}, ${item.meaning}` : `${item.meaning}, 图片选项 ${index + 1}`}
             >
               <span className="picture" role="img" aria-label={item.meaning}>

@@ -12,3 +12,7 @@ export function getAnswerAudioPlan(isCorrect: boolean, word: string, meaning: st
     { type: 'answerSpeech', word, meaning },
   ]
 }
+
+export function getRevealedChoiceAudioPlan(word: string, meaning: string): AnswerAudioAction[] {
+  return [{ type: 'answerSpeech', word, meaning }]
+}
