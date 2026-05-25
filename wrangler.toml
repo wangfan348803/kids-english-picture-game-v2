@@ -1,0 +1,8 @@
+name = "kids-english-picture-game-v2"
+compatibility_date = "2026-05-25"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "kids_english_v2_db"
+database_id = "8ce0138a-f8bf-427e-a302-bb11b444eb92"

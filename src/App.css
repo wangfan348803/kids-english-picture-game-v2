@@ -381,6 +381,31 @@ h2 {
   font-weight: 950;
 }
 
+.sync-status {
+  min-height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(120, 200, 255, 0.16);
+  color: #44506f;
+  font-size: 12px;
+}
+
+.sync-status.saving {
+  background: #fff2b0;
+  color: #55380b;
+}
+
+.sync-status.saved {
+  background: #dff8ec;
+  color: #126044;
+}
+
+.sync-status.offline {
+  background: #ffe2ee;
+  color: #7b2143;
+}
+
 .progress-track {
   height: 12px;
   overflow: hidden;

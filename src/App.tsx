@@ -4,6 +4,7 @@ import { categories, type CategoryId, vocabulary, type VocabularyItem } from './
 import { getAnswerAudioPlan, getRevealedChoiceAudioPlan } from './logic/answerAudio'
 import { GameAudio } from './logic/audio'
 import { appendRound, canGoNext, canGoPrevious, createRoundHistory, moveNext, movePrevious, replaceCurrentRound } from './logic/history'
+import { createLearningSessionId, getOrCreatePlayerId, saveAnswerRecord } from './logic/learningApi'
 import { type AnswerRevealState, getAnswerVisibility } from './logic/reveal'
 import { readInitialVolume } from './logic/preferences'
 import { buildChoices, scoreCorrectAnswer, wordsForCategory } from './logic/round'
@@ -14,7 +15,13 @@ type Feedback = {
   text: string
 }
 
+type CloudStatus = 'idle' | 'saving' | 'saved' | 'offline'
+
 const firstCategory: CategoryId = 'All'
+
+function currentTimeMs() {
+  return Date.now()
+}
 
 function App() {
   const [session] = useState(() => createLearningSession(vocabulary, firstCategory))
@@ -27,9 +34,13 @@ function App() {
   const [volume, setVolume] = useState(() => readInitialVolume(localStorage.getItem('kid-word-v2-volume')))
   const [started, setStarted] = useState(false)
   const [feedback, setFeedback] = useState<Feedback>({ tone: 'idle', text: '点击开始学习，听单词，选图片。' })
+  const [cloudStatus, setCloudStatus] = useState<CloudStatus>('idle')
 
   const categoryWords = useMemo(() => wordsForCategory(vocabulary, activeCategory), [activeCategory])
+  const [playerId] = useState(() => getOrCreatePlayerId())
   const engineRef = useRef(session.engine)
+  const sessionIdRef = useRef(createLearningSessionId())
+  const roundStartedAtRef = useRef(currentTimeMs())
   const mutedRef = useRef(muted)
   const volumeRef = useRef(volume)
   const audioRef = useRef<GameAudio | null>(null)
@@ -72,9 +83,14 @@ function App() {
     setFeedback({ tone: 'idle', text: answerReveal === 'revealed' ? '已揭晓答案，可以重听或进入下一题。' : '听读音，选择正确图片。' })
   }
 
+  function markRoundStarted() {
+    roundStartedAtRef.current = currentTimeMs()
+  }
+
   function newRound(nextCategory = activeCategory, shouldSpeak = started, resetEngine = false) {
     if (resetEngine) engineRef.current.reset(nextCategory)
     const nextTarget = engineRef.current.next()
+    markRoundStarted()
     setHistory(createRoundHistory({ target: nextTarget, choices: buildChoices(vocabulary, nextTarget), answerReveal: 'hidden' }))
     setFeedback({ tone: 'idle', text: shouldSpeak ? '听读音，选择正确图片。' : '准备好了就点击喇叭。' })
     if (shouldSpeak) void audio().speak(nextTarget.word)
@@ -89,6 +105,26 @@ function App() {
 
     setFeedback({ tone: 'idle', text: '听读音，选择正确图片。' })
     void audio().speak(target.word)
+  }
+
+  function recordAnswer(item: VocabularyItem, isCorrect: boolean, nextScore: number, nextStreak: number, points: number) {
+    setCloudStatus('saving')
+    void saveAnswerRecord({
+      playerId,
+      sessionId: sessionIdRef.current,
+      targetWord: target.word,
+      selectedWord: item.word,
+      targetMeaning: target.meaning,
+      selectedMeaning: item.meaning,
+      category: target.category,
+      isCorrect,
+      score: nextScore,
+      streak: nextStreak,
+      points,
+      responseMs: currentTimeMs() - roundStartedAtRef.current,
+    }).then((result) => {
+      setCloudStatus(result.ok ? 'saved' : 'offline')
+    })
   }
 
   function chooseCard(item: VocabularyItem) {
@@ -111,6 +147,7 @@ function App() {
       setStreak(nextStreak)
       setScore(nextScore)
       setBest(Math.max(best, nextScore))
+      recordAnswer(item, true, nextScore, nextStreak, gained)
       setFeedback({ tone: 'good', text: `Great! ${item.word} 是「${item.meaning}」。+${gained}，点击下一题继续。` })
       const audioPlan = getAnswerAudioPlan(true, item.word, item.meaning, nextStreak > 0 && nextStreak % 5 === 0 ? 'bonus' : 'correct')
       audioPlan.forEach((action) => {
@@ -118,8 +155,10 @@ function App() {
         if (action.type === 'answerSpeech') window.setTimeout(() => void audio().speakAnswer(action.word, action.meaning), 360)
       })
     } else {
+      const nextScore = Math.max(0, score - 2)
       setStreak(0)
-      setScore((value) => Math.max(0, value - 2))
+      setScore(nextScore)
+      recordAnswer(item, false, nextScore, 0, -2)
       setFeedback({ tone: 'try', text: '还不是这张图。再听一次，只看图片再选。' })
       getAnswerAudioPlan(false, item.word, item.meaning).forEach((action) => {
         if (action.type === 'sound') audio().play(action.kind)
@@ -160,6 +199,7 @@ function App() {
     }
 
     const nextTarget = engineRef.current.next()
+    markRoundStarted()
     setHistory(appendRound(history, { target: nextTarget, choices: buildChoices(vocabulary, nextTarget), answerReveal: 'hidden' }))
     setFeedback({ tone: 'idle', text: '听读音，选择正确图片。' })
     void audio().speak(nextTarget.word)
@@ -274,6 +314,7 @@ function App() {
         </div>
 
         <div className="progress-box">
+          <span className={`sync-status ${cloudStatus}`}>{cloudStatusLabel[cloudStatus]}</span>
           <span>本轮识别度</span>
           <div className="progress-track">
             <i style={{ width: `${progress}%` }} />
@@ -282,6 +323,13 @@ function App() {
       </aside>
     </main>
   )
+}
+
+const cloudStatusLabel: Record<CloudStatus, string> = {
+  idle: '云端记录待开始',
+  saving: '云端保存中...',
+  saved: '云端已保存',
+  offline: '本地模式，未写入云端',
 }
 
 function Metric({ label, value }: { label: string; value: number }) {
