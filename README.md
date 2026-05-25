@@ -19,7 +19,17 @@ npm run dev
 npm test
 npm run lint
 npm run build
+npm run deploy:cloudflare
 ```
+
+## Deployment
+
+Cloudflare Pages is the primary deployment target:
+
+- Production: https://kids-english-picture-game-v2.pages.dev
+- Deploy command: `npm run deploy:cloudflare`
+
+Netlify is no longer the primary deployment target for this project.
 
 ## Structure
 
