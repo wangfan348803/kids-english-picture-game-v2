@@ -107,11 +107,11 @@ function App() {
 
   function speakSnapshot(target: LearningItem, answerReveal: AnswerRevealState) {
     if (answerReveal === 'revealed') {
-      void audio().speakAnswer(target.speechText, target.speechMeaning)
+      void audio().speakAnswer(target.speechText, target.speechMeaning, target.audioSrc)
       return
     }
 
-    void audio().speak(target.speechText)
+    void audio().speak(target.speechText, target.audioSrc)
   }
 
   function setCurrentFeedback(answerReveal: AnswerRevealState) {
@@ -134,18 +134,18 @@ function App() {
     const snapshot = buildRoundSnapshot(nextTarget, nextMode)
     setHistory(createRoundHistory(snapshot))
     setFeedback({ tone: 'idle', text: getModeFeedback(nextMode, shouldSpeak) })
-    if (shouldSpeak) void audio().speak(snapshot.target.speechText)
+    if (shouldSpeak) void audio().speak(snapshot.target.speechText, snapshot.target.audioSrc)
   }
 
   function handleStart() {
     startAudio()
     if (answerReveal === 'revealed') {
-      void audio().speakAnswer(target.speechText, target.speechMeaning)
+      void audio().speakAnswer(target.speechText, target.speechMeaning, target.audioSrc)
       return
     }
 
     setFeedback({ tone: 'idle', text: learningModeMeta[activeMode].hint })
-    void audio().speak(target.speechText)
+    void audio().speak(target.speechText, target.audioSrc)
   }
 
   function recordAnswer(item: LearningItem, isCorrect: boolean, nextScore: number, nextStreak: number, points: number) {
@@ -172,7 +172,7 @@ function App() {
 
     if (answerReveal === 'revealed') {
       getRevealedChoiceAudioPlan(item.speechText, item.speechMeaning).forEach((action) => {
-        if (action.type === 'answerSpeech') void audio().speakAnswer(action.word, action.meaning)
+        if (action.type === 'answerSpeech') void audio().speakAnswer(action.word, action.meaning, item.audioSrc)
       })
       return
     }
@@ -192,7 +192,7 @@ function App() {
       const audioPlan = getAnswerAudioPlan(true, target.speechText, target.speechMeaning, nextStreak > 0 && nextStreak % 5 === 0 ? 'bonus' : 'correct')
       audioPlan.forEach((action) => {
         if (action.type === 'sound') audio().play(action.kind)
-        if (action.type === 'answerSpeech') window.setTimeout(() => void audio().speakAnswer(action.word, action.meaning), 360)
+        if (action.type === 'answerSpeech') window.setTimeout(() => void audio().speakAnswer(action.word, action.meaning, target.audioSrc), 360)
       })
     } else {
       const nextScore = Math.max(0, score - 2)
@@ -237,7 +237,7 @@ function App() {
     const snapshot = buildRoundSnapshot(nextTarget, activeMode)
     setHistory(createRoundHistory(snapshot))
     setFeedback({ tone: 'idle', text: '开始复习错词，听读音再选择。' })
-    void audio().speak(snapshot.target.speechText)
+    void audio().speak(snapshot.target.speechText, snapshot.target.audioSrc)
   }
 
   function replayTarget() {
@@ -270,7 +270,7 @@ function App() {
     const snapshot = buildRoundSnapshot(nextTarget, activeMode)
     setHistory(appendRound(history, snapshot))
     setFeedback({ tone: 'idle', text: learningModeMeta[activeMode].hint })
-    void audio().speak(snapshot.target.speechText)
+    void audio().speak(snapshot.target.speechText, snapshot.target.audioSrc)
   }
 
   const { target, choices, answerReveal } = history.current

@@ -9,6 +9,7 @@ const apple: VocabularyItem = {
   category: 'Food',
   sentence: 'I like apples.',
   sentenceMeaning: '我喜欢苹果。',
+  audioSrc: '/audio/words/apple.mp3',
 }
 
 const cat: VocabularyItem = {
@@ -43,6 +44,7 @@ describe('learning content modes', () => {
     expect(item.answer).toBe('apple')
     expect(item.speechText).toBe('apple')
     expect(item.meaning).toBe('苹果')
+    expect(item.audioSrc).toBe('/audio/words/apple.mp3')
   })
 
   it('uses complete sentences in sentence mode', () => {

@@ -121,22 +121,60 @@ export class GameAudio {
     navigator.vibrate(60)
   }
 
-  async speak(word: string) {
-    if (this.isMuted() || !window.speechSynthesis) return
+  async speak(word: string, audioSrc?: string) {
+    if (this.isMuted()) return
     this.start()
     this.play('tap')
+
+    if (audioSrc && (await this.playSpeechFile(audioSrc))) return
+    if (!window.speechSynthesis) return
 
     this.speakSequence([{ text: word, lang: 'en-US', voice: this.pickEnglishVoice.bind(this) }])
   }
 
-  async speakAnswer(word: string, meaning: string) {
-    if (this.isMuted() || !window.speechSynthesis) return
+  async speakAnswer(word: string, meaning: string, audioSrc?: string) {
+    if (this.isMuted()) return
     this.start()
+
+    if (audioSrc && (await this.playSpeechFile(audioSrc, true))) {
+      if (!window.speechSynthesis) return
+      this.speakSequence([{ text: meaning, lang: 'zh-CN', voice: this.pickChineseVoice.bind(this) }])
+      return
+    }
+
+    if (!window.speechSynthesis) return
 
     this.speakSequence([
       { text: word, lang: 'en-US', voice: this.pickEnglishVoice.bind(this) },
       { text: meaning, lang: 'zh-CN', voice: this.pickChineseVoice.bind(this) },
     ])
+  }
+
+  private async playSpeechFile(source: string, waitForEnd = false) {
+    if (typeof Audio === 'undefined') return false
+
+    try {
+      const player = new Audio(source)
+      player.volume = Math.max(0, Math.min(100, this.getVolume())) / 100
+      player.currentTime = 0
+
+      if (!waitForEnd) {
+        await player.play()
+        return true
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const finish = () => resolve()
+        const fail = () => reject(new Error('speech file failed'))
+        player.addEventListener('ended', finish, { once: true })
+        player.addEventListener('error', fail, { once: true })
+        void player.play().catch(reject)
+        window.setTimeout(resolve, 3500)
+      })
+      return true
+    } catch {
+      return false
+    }
   }
 
   private speakSequence(parts: Array<{ text: string; lang: string; voice: () => SpeechSynthesisVoice | undefined }>) {

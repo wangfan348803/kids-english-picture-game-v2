@@ -16,6 +16,7 @@ export type LearningItem = {
   category: Exclude<CategoryId, 'All'>
   speechText: string
   speechMeaning: string
+  audioSrc?: string
   choiceStyle: ChoiceStyle
 }
 
@@ -68,6 +69,7 @@ function createWordItem(item: VocabularyItem): LearningItem {
     category: item.category,
     speechText: item.word,
     speechMeaning: item.meaning,
+    audioSrc: item.audioSrc,
     choiceStyle: 'picture',
   }
 }
@@ -87,6 +89,7 @@ function createSentenceItem(item: VocabularyItem): LearningItem {
     category: item.category,
     speechText: sentence,
     speechMeaning: sentenceMeaning,
+    audioSrc: item.sentenceAudioSrc,
     choiceStyle: 'picture',
   }
 }

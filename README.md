@@ -8,6 +8,7 @@ React + TypeScript version of the kids picture-based English learning game.
 - Default `All` mode with category filters, including `Jobs`.
 - Listen-and-choose gameplay with scoring, streaks, best score, and volume controls.
 - Browser speech synthesis plus Web Audio feedback effects.
+- Local MP3 pronunciation trial for selected high-frequency words with TTS fallback.
 - Round engine prevents recent target-word repeats.
 - Cloudflare Pages Functions + D1 persistence for answer events and per-word progress.
 - Mobile-first layout with the game area shown before controls.

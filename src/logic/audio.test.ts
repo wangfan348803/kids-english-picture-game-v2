@@ -10,6 +10,7 @@ type SpokenUtterance = SpeechSynthesisUtterance & {
 const spoken: SpokenUtterance[] = []
 const cancel = vi.fn()
 const audioPlay = vi.fn(() => Promise.resolve())
+const audioAddEventListener = vi.fn()
 const vibrate = vi.fn()
 const createdAudioSources: string[] = []
 
@@ -34,6 +35,7 @@ describe('GameAudio speech', () => {
     createdAudioSources.length = 0
     cancel.mockClear()
     audioPlay.mockClear()
+    audioAddEventListener.mockClear()
     vibrate.mockClear()
 
     vi.stubGlobal('SpeechSynthesisUtterance', FakeSpeechSynthesisUtterance)
@@ -48,6 +50,7 @@ describe('GameAudio speech', () => {
         }
 
         play = audioPlay
+        addEventListener = audioAddEventListener
       },
     )
     vi.stubGlobal('navigator', {
@@ -146,5 +149,15 @@ describe('GameAudio speech', () => {
     await vi.runAllTimersAsync()
 
     expect(spoken[0].voice?.name).toBe('Microsoft Aria Natural')
+  })
+
+  it('plays a speech audio file before falling back to browser speech', async () => {
+    const audio = new GameAudio(() => 80, () => false)
+
+    await audio.speak('cat', '/audio/words/cat.mp3')
+
+    expect(createdAudioSources).toContain('/audio/words/cat.mp3')
+    expect(audioPlay).toHaveBeenCalledTimes(2)
+    expect(spoken).toHaveLength(0)
   })
 })
