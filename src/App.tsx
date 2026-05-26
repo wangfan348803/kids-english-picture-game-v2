@@ -204,16 +204,14 @@ function App() {
       audioPlan.forEach((action) => {
         if (action.type === 'sound') audio().play(action.kind)
         if (action.type === 'answerSpeech') {
-          window.setTimeout(() => {
-            void audio()
-              .speakAnswer(action.word, action.meaning, target.audioSrc, target.meaningAudioSrc)
-              .finally(() => {
-                if (answerSpeechRunRef.current === answerSpeechRun) {
-                  setAnswerSpeechDone(true)
-                  setFeedback({ tone: 'good', text: `Great! ${target.answer} 是「${target.meaning}」。+${gained}，点击下一题继续。` })
-                }
-              })
-          }, 360)
+          void audio()
+            .speakAnswer(action.word, action.meaning, target.audioSrc, target.meaningAudioSrc)
+            .finally(() => {
+              if (answerSpeechRunRef.current === answerSpeechRun) {
+                setAnswerSpeechDone(true)
+                setFeedback({ tone: 'good', text: `Great! ${target.answer} 是「${target.meaning}」。+${gained}，点击下一题继续。` })
+              }
+            })
         }
       })
     } else {

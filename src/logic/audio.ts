@@ -137,7 +137,7 @@ export class GameAudio {
     if (this.isMuted()) return
     this.stopSpeech()
     this.start()
-    this.play('tap')
+    if (!this.isMobileBrowser()) this.play('tap')
     const attempt = this.speechAttempt
 
     if (audioSrc && (await this.playSpeechFile(audioSrc, false, attempt))) return

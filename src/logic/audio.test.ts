@@ -164,7 +164,7 @@ describe('GameAudio speech', () => {
     await audio.speak('cat', '/audio/words/cat.mp3')
 
     expect(createdAudioSources.some((source) => source.startsWith('/audio/words/cat.mp3?v='))).toBe(true)
-    expect(audioPlay).toHaveBeenCalledTimes(2)
+    expect(audioPlay).toHaveBeenCalledTimes(1)
     expect(spoken).toHaveLength(0)
   })
 
