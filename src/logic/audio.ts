@@ -24,7 +24,7 @@ const patterns: Record<SoundKind, Tone[]> = {
   ],
 }
 
-const speechAssetVersion = '20260526-local-audio-2'
+const speechAssetVersion = '20260526-local-audio-3'
 
 export class GameAudio {
   private context: AudioContext | null = null
@@ -138,8 +138,10 @@ export class GameAudio {
     if (this.isMuted()) return
     this.start()
 
+    const meaningPlayer = meaningAudioSrc ? this.createSpeechPlayer(meaningAudioSrc) : null
+
     if (audioSrc && (await this.playSpeechFile(audioSrc, true))) {
-      if (meaningAudioSrc && (await this.playSpeechFile(meaningAudioSrc))) return
+      if (meaningPlayer && (await this.playPreparedSpeechFile(meaningPlayer))) return
       if (!window.speechSynthesis) return
       this.speakSequence([{ text: meaning, lang: 'zh-CN', voice: this.pickChineseVoice.bind(this) }])
       return
@@ -154,10 +156,29 @@ export class GameAudio {
   }
 
   private async playSpeechFile(source: string, waitForEnd = false) {
+    const player = this.createSpeechPlayer(source)
+    if (!player) return false
+
+    return this.playPreparedSpeechFile(player, waitForEnd)
+  }
+
+  private createSpeechPlayer(source: string) {
     if (typeof Audio === 'undefined') return false
 
+    const player = new Audio(versionedAudioSource(source))
+    player.preload = 'auto'
+    player.volume = Math.max(0, Math.min(100, this.getVolume())) / 100
     try {
-      const player = new Audio(versionedAudioSource(source))
+      player.load()
+    } catch {
+      // Some embedded browsers throw on load(); play() can still succeed.
+    }
+
+    return player
+  }
+
+  private async playPreparedSpeechFile(player: HTMLAudioElement, waitForEnd = false) {
+    try {
       player.volume = Math.max(0, Math.min(100, this.getVolume())) / 100
       player.currentTime = 0
 
@@ -167,12 +188,30 @@ export class GameAudio {
       }
 
       await new Promise<void>((resolve, reject) => {
-        const finish = () => resolve()
-        const fail = () => reject(new Error('speech file failed'))
+        let fallbackTimer: number | undefined
+        let settled = false
+        const finish = () => {
+          if (settled) return
+          settled = true
+          if (fallbackTimer !== undefined) clearTimeout(fallbackTimer)
+          resolve()
+        }
+        const fail = () => {
+          if (settled) return
+          settled = true
+          if (fallbackTimer !== undefined) clearTimeout(fallbackTimer)
+          reject(new Error('speech file failed'))
+        }
+        const scheduleFallback = () => {
+          if (settled) return
+          if (fallbackTimer !== undefined) clearTimeout(fallbackTimer)
+          const durationMs = Number.isFinite(player.duration) && player.duration > 0 ? player.duration * 1000 + 90 : 1400
+          fallbackTimer = window.setTimeout(finish, Math.max(520, Math.min(2200, durationMs)))
+        }
         player.addEventListener('ended', finish, { once: true })
         player.addEventListener('error', fail, { once: true })
-        void player.play().catch(reject)
-        window.setTimeout(resolve, 3500)
+        player.addEventListener('loadedmetadata', scheduleFallback, { once: true })
+        void player.play().then(scheduleFallback).catch(reject)
       })
       return true
     } catch {
