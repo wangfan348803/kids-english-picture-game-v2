@@ -10,6 +10,7 @@ type SpokenUtterance = SpeechSynthesisUtterance & {
 const spoken: SpokenUtterance[] = []
 const cancel = vi.fn()
 const audioPlay = vi.fn(() => Promise.resolve())
+const audioPause = vi.fn()
 const audioAddEventListener = vi.fn()
 const vibrate = vi.fn()
 const createdAudioSources: string[] = []
@@ -35,6 +36,7 @@ describe('GameAudio speech', () => {
     createdAudioSources.length = 0
     cancel.mockClear()
     audioPlay.mockClear()
+    audioPause.mockClear()
     audioAddEventListener.mockClear()
     vibrate.mockClear()
 
@@ -50,6 +52,8 @@ describe('GameAudio speech', () => {
         }
 
         play = audioPlay
+        pause = audioPause
+        load = vi.fn()
         addEventListener = audioAddEventListener
       },
     )
@@ -88,11 +92,13 @@ describe('GameAudio speech', () => {
     expect(spoken[0].lang).toBe('en-US')
 
     spoken[0].onend?.()
-    await speaking
 
     expect(spoken).toHaveLength(2)
     expect(spoken[1].text).toBe('猫')
     expect(spoken[1].lang).toBe('zh-CN')
+
+    spoken[1].onend?.()
+    await speaking
   })
 
   it('uses an HTMLAudio fallback for mobile WeChat sound effects', () => {
@@ -159,6 +165,17 @@ describe('GameAudio speech', () => {
     expect(createdAudioSources.some((source) => source.startsWith('/audio/words/cat.mp3?v='))).toBe(true)
     expect(audioPlay).toHaveBeenCalledTimes(2)
     expect(spoken).toHaveLength(0)
+  })
+
+  it('stops the previous speech file before starting a new one', async () => {
+    const audio = new GameAudio(() => 80, () => false)
+
+    await audio.speak('cat', '/audio/words/cat.mp3')
+    await audio.speak('dog', '/audio/words/dog.mp3')
+
+    expect(audioPause).toHaveBeenCalled()
+    expect(createdAudioSources.some((source) => source.startsWith('/audio/words/cat.mp3?v='))).toBe(true)
+    expect(createdAudioSources.some((source) => source.startsWith('/audio/words/dog.mp3?v='))).toBe(true)
   })
 
   it('uses local English and Chinese audio files for revealed answers', async () => {

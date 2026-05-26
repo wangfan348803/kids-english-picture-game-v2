@@ -59,6 +59,7 @@ function App() {
   const [muted] = useState(() => localStorage.getItem('kid-word-v2-muted') === 'true')
   const [volume] = useState(() => readInitialVolume(localStorage.getItem('kid-word-v2-volume')))
   const [started, setStarted] = useState(false)
+  const [answerSpeechDone, setAnswerSpeechDone] = useState(true)
   const [feedback, setFeedback] = useState<Feedback>({ tone: 'idle', text: '点击开始学习，听单词，选图片。' })
   const [learningProgress, setLearningProgress] = useState<LearningProgress>(initialProgress)
 
@@ -69,6 +70,7 @@ function App() {
   const mutedRef = useRef(muted)
   const volumeRef = useRef(volume)
   const audioRef = useRef<GameAudio | null>(null)
+  const answerSpeechRunRef = useRef(0)
 
   const refreshLearningProgress = useCallback(() => {
     void fetchLearningProgress(playerId).then((progress) => {
@@ -122,6 +124,11 @@ function App() {
     roundStartedAtRef.current = currentTimeMs()
   }
 
+  function resetAnswerSpeechGate() {
+    answerSpeechRunRef.current += 1
+    setAnswerSpeechDone(true)
+  }
+
   function buildRoundSnapshot(targetWord: VocabularyItem, mode: LearningMode) {
     const target = createLearningItem(targetWord, mode)
     return { target, choices: buildLearningChoices(vocabulary, target, mode), answerReveal: 'hidden' as const }
@@ -131,6 +138,7 @@ function App() {
     if (resetEngine) engineRef.current.reset(nextCategory)
     const nextTarget = engineRef.current.next()
     markRoundStarted()
+    resetAnswerSpeechGate()
     const snapshot = buildRoundSnapshot(nextTarget, nextMode)
     setHistory(createRoundHistory(snapshot))
     setFeedback({ tone: 'idle', text: getModeFeedback(nextMode, shouldSpeak) })
@@ -183,16 +191,30 @@ function App() {
       const nextStreak = streak + 1
       const gained = scoreCorrectAnswer(streak)
       const nextScore = score + gained
+      const answerSpeechRun = answerSpeechRunRef.current + 1
+      answerSpeechRunRef.current = answerSpeechRun
+      setAnswerSpeechDone(false)
       setHistory(replaceCurrentRound(history, { target, choices, answerReveal: 'revealed' }))
       setStreak(nextStreak)
       setScore(nextScore)
       setBest(Math.max(best, nextScore))
       recordAnswer(item, true, nextScore, nextStreak, gained)
-      setFeedback({ tone: 'good', text: `Great! ${target.answer} 是「${target.meaning}」。+${gained}，点击下一题继续。` })
+      setFeedback({ tone: 'good', text: `Great! ${target.answer} 是「${target.meaning}」。+${gained}，正在播放英文和中文。` })
       const audioPlan = getAnswerAudioPlan(true, target.speechText, target.speechMeaning, nextStreak > 0 && nextStreak % 5 === 0 ? 'bonus' : 'correct')
       audioPlan.forEach((action) => {
         if (action.type === 'sound') audio().play(action.kind)
-        if (action.type === 'answerSpeech') window.setTimeout(() => void audio().speakAnswer(action.word, action.meaning, target.audioSrc, target.meaningAudioSrc), 360)
+        if (action.type === 'answerSpeech') {
+          window.setTimeout(() => {
+            void audio()
+              .speakAnswer(action.word, action.meaning, target.audioSrc, target.meaningAudioSrc)
+              .finally(() => {
+                if (answerSpeechRunRef.current === answerSpeechRun) {
+                  setAnswerSpeechDone(true)
+                  setFeedback({ tone: 'good', text: `Great! ${target.answer} 是「${target.meaning}」。+${gained}，点击下一题继续。` })
+                }
+              })
+          }, 360)
+        }
       })
     } else {
       const nextScore = Math.max(0, score - 2)
@@ -234,6 +256,7 @@ function App() {
     engineRef.current = createRoundEngine(reviewVocabulary, 'All')
     const nextTarget = engineRef.current.next()
     markRoundStarted()
+    resetAnswerSpeechGate()
     const snapshot = buildRoundSnapshot(nextTarget, activeMode)
     setHistory(createRoundHistory(snapshot))
     setFeedback({ tone: 'idle', text: '开始复习错词，听读音再选择。' })
@@ -249,6 +272,7 @@ function App() {
     if (!canGoPrevious(history)) return
     startAudio()
     const previousHistory = movePrevious(history)
+    resetAnswerSpeechGate()
     setHistory(previousHistory)
     setCurrentFeedback(previousHistory.current.answerReveal)
     speakSnapshot(previousHistory.current.target, previousHistory.current.answerReveal)
@@ -259,6 +283,7 @@ function App() {
 
     if (canGoNext(history)) {
       const nextHistory = moveNext(history)
+      resetAnswerSpeechGate()
       setHistory(nextHistory)
       setCurrentFeedback(nextHistory.current.answerReveal)
       speakSnapshot(nextHistory.current.target, nextHistory.current.answerReveal)
@@ -267,6 +292,7 @@ function App() {
 
     const nextTarget = engineRef.current.next()
     markRoundStarted()
+    resetAnswerSpeechGate()
     const snapshot = buildRoundSnapshot(nextTarget, activeMode)
     setHistory(appendRound(history, snapshot))
     setFeedback({ tone: 'idle', text: learningModeMeta[activeMode].hint })
@@ -275,6 +301,7 @@ function App() {
 
   const { target, choices, answerReveal } = history.current
   const answerVisibility = getAnswerVisibility(answerReveal)
+  const showNextButton = answerVisibility.nextButton && answerSpeechDone
   const hasPreviousRound = canGoPrevious(history)
   const accuracyText = learningProgress.summary.totalAnswers > 0 ? `${learningProgress.summary.accuracy}%` : '--'
   const hasDifficultWords = learningProgress.difficultWords.length > 0
@@ -332,7 +359,7 @@ function App() {
               上一题
             </button>
           ) : null}
-          {answerVisibility.nextButton ? (
+          {showNextButton ? (
             <button className="next-button" type="button" onClick={goToNextRound}>
               下一题
             </button>

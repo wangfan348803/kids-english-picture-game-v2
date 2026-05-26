@@ -30,6 +30,7 @@ export class GameAudio {
   private context: AudioContext | null = null
   private gain: GainNode | null = null
   private htmlAudioSources = new Map<SoundKind, string>()
+  private speechPlayers = new Set<HTMLAudioElement>()
   private speechAttempt = 0
   private voicesReady: Promise<SpeechSynthesisVoice[]> | null = null
   private getVolume: () => number
@@ -91,6 +92,16 @@ export class GameAudio {
     }
   }
 
+  stopSpeech() {
+    this.speechAttempt += 1
+    for (const player of this.speechPlayers) {
+      player.pause()
+      player.currentTime = 0
+    }
+    this.speechPlayers.clear()
+    if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel?.()
+  }
+
   private shouldUseHtmlAudio() {
     if (typeof navigator === 'undefined') return false
     return /MicroMessenger|iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
@@ -125,41 +136,48 @@ export class GameAudio {
 
   async speak(word: string, audioSrc?: string) {
     if (this.isMuted()) return
+    this.stopSpeech()
     this.start()
     this.play('tap')
+    const attempt = this.speechAttempt
 
-    if (audioSrc && (await this.playSpeechFile(audioSrc))) return
+    if (audioSrc && (await this.playSpeechFile(audioSrc, false, attempt))) return
+    if (attempt !== this.speechAttempt) return
     if (!window.speechSynthesis) return
 
-    this.speakSequence([{ text: word, lang: 'en-US', voice: this.pickEnglishVoice.bind(this) }])
+    await this.speakSequence([{ text: word, lang: 'en-US', voice: this.pickEnglishVoice.bind(this) }])
   }
 
   async speakAnswer(word: string, meaning: string, audioSrc?: string, meaningAudioSrc?: string) {
     if (this.isMuted()) return
+    this.stopSpeech()
     this.start()
+    const attempt = this.speechAttempt
 
     const meaningPlayer = meaningAudioSrc ? this.createSpeechPlayer(meaningAudioSrc) : null
 
-    if (audioSrc && (await this.playSpeechFile(audioSrc, true))) {
-      if (meaningPlayer && (await this.playPreparedSpeechFile(meaningPlayer))) return
+    if (audioSrc && (await this.playSpeechFile(audioSrc, true, attempt))) {
+      if (attempt !== this.speechAttempt) return
+      if (meaningPlayer && (await this.playPreparedSpeechFile(meaningPlayer, true, attempt))) return
+      if (attempt !== this.speechAttempt) return
       if (!window.speechSynthesis) return
-      this.speakSequence([{ text: meaning, lang: 'zh-CN', voice: this.pickChineseVoice.bind(this) }])
+      await this.speakSequence([{ text: meaning, lang: 'zh-CN', voice: this.pickChineseVoice.bind(this) }])
       return
     }
 
     if (!window.speechSynthesis) return
 
-    this.speakSequence([
+    await this.speakSequence([
       { text: word, lang: 'en-US', voice: this.pickEnglishVoice.bind(this) },
       { text: meaning, lang: 'zh-CN', voice: this.pickChineseVoice.bind(this) },
     ])
   }
 
-  private async playSpeechFile(source: string, waitForEnd = false) {
+  private async playSpeechFile(source: string, waitForEnd = false, attempt = this.speechAttempt) {
     const player = this.createSpeechPlayer(source)
     if (!player) return false
 
-    return this.playPreparedSpeechFile(player, waitForEnd)
+    return this.playPreparedSpeechFile(player, waitForEnd, attempt)
   }
 
   private createSpeechPlayer(source: string) {
@@ -177,13 +195,17 @@ export class GameAudio {
     return player
   }
 
-  private async playPreparedSpeechFile(player: HTMLAudioElement, waitForEnd = false) {
+  private async playPreparedSpeechFile(player: HTMLAudioElement, waitForEnd = false, attempt = this.speechAttempt) {
+    if (attempt !== this.speechAttempt) return false
+    this.speechPlayers.add(player)
+
     try {
       player.volume = Math.max(0, Math.min(100, this.getVolume())) / 100
       player.currentTime = 0
 
       if (!waitForEnd) {
         await player.play()
+        player.addEventListener('ended', () => this.speechPlayers.delete(player), { once: true })
         return true
       }
 
@@ -193,12 +215,14 @@ export class GameAudio {
         const finish = () => {
           if (settled) return
           settled = true
+          this.speechPlayers.delete(player)
           if (fallbackTimer !== undefined) clearTimeout(fallbackTimer)
           resolve()
         }
         const fail = () => {
           if (settled) return
           settled = true
+          this.speechPlayers.delete(player)
           if (fallbackTimer !== undefined) clearTimeout(fallbackTimer)
           reject(new Error('speech file failed'))
         }
@@ -213,8 +237,9 @@ export class GameAudio {
         player.addEventListener('loadedmetadata', scheduleFallback, { once: true })
         void player.play().then(scheduleFallback).catch(reject)
       })
-      return true
+      return attempt === this.speechAttempt
     } catch {
+      this.speechPlayers.delete(player)
       return false
     }
   }
@@ -224,13 +249,19 @@ export class GameAudio {
     this.waitForVoices()
 
     speechSynthesis.resume?.()
-    speechSynthesis.cancel()
 
-    const run = () => {
-      if (attempt !== this.speechAttempt || this.isMuted()) return
+    return new Promise<void>((resolve) => {
+      const run = () => {
+        if (attempt !== this.speechAttempt || this.isMuted()) {
+          resolve()
+          return
+        }
       const speakPart = (index: number) => {
         const part = parts[index]
-        if (!part || attempt !== this.speechAttempt || this.isMuted()) return
+        if (!part || attempt !== this.speechAttempt || this.isMuted()) {
+          resolve()
+          return
+        }
 
         const utterance = new SpeechSynthesisUtterance(part.text)
         const voice = part.voice()
@@ -240,18 +271,20 @@ export class GameAudio {
         utterance.pitch = part.lang.startsWith('zh') ? 1.02 : 1.12
         utterance.volume = this.getVolume() / 100
         utterance.onend = () => speakPart(index + 1)
+        utterance.onerror = () => resolve()
         speechSynthesis.speak(utterance)
       }
 
       speakPart(0)
-    }
+      }
 
-    if (this.isMobileBrowser()) {
-      run()
-      return
-    }
+      if (this.isMobileBrowser()) {
+        run()
+        return
+      }
 
-    window.setTimeout(run, 70)
+      window.setTimeout(run, 70)
+    })
   }
 
   private pickEnglishVoice() {
