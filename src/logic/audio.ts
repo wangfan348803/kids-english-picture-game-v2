@@ -210,32 +210,42 @@ export class GameAudio {
       }
 
       await new Promise<void>((resolve, reject) => {
-        let fallbackTimer: number | undefined
+        let watchdogTimer: number | undefined
         let settled = false
-        const finish = () => {
+        const clearWatchdog = () => {
+          if (watchdogTimer !== undefined) clearTimeout(watchdogTimer)
+        }
+        const finish = (stopPlayer = false) => {
           if (settled) return
           settled = true
+          if (stopPlayer) stopAudioPlayer(player)
           this.speechPlayers.delete(player)
-          if (fallbackTimer !== undefined) clearTimeout(fallbackTimer)
+          clearWatchdog()
           resolve()
         }
         const fail = () => {
           if (settled) return
           settled = true
           this.speechPlayers.delete(player)
-          if (fallbackTimer !== undefined) clearTimeout(fallbackTimer)
+          clearWatchdog()
           reject(new Error('speech file failed'))
         }
-        const scheduleFallback = () => {
+        const scheduleWatchdog = () => {
           if (settled) return
-          if (fallbackTimer !== undefined) clearTimeout(fallbackTimer)
-          const durationMs = Number.isFinite(player.duration) && player.duration > 0 ? player.duration * 1000 + 90 : 1400
-          fallbackTimer = window.setTimeout(finish, Math.max(520, Math.min(2200, durationMs)))
+          clearWatchdog()
+          const durationMs = Number.isFinite(player.duration) && player.duration > 0 ? player.duration * 1000 + 1000 : 6500
+          watchdogTimer = window.setTimeout(() => finish(true), Math.max(2500, Math.min(10000, durationMs)))
         }
-        player.addEventListener('ended', finish, { once: true })
+        const finishFromProgress = () => {
+          if (!Number.isFinite(player.duration) || player.duration <= 0) return
+          if (player.currentTime >= player.duration - 0.04) finish()
+        }
+        player.addEventListener('ended', () => finish(), { once: true })
         player.addEventListener('error', fail, { once: true })
-        player.addEventListener('loadedmetadata', scheduleFallback, { once: true })
-        void player.play().then(scheduleFallback).catch(reject)
+        player.addEventListener('loadedmetadata', scheduleWatchdog, { once: true })
+        player.addEventListener('durationchange', scheduleWatchdog, { once: true })
+        player.addEventListener('timeupdate', finishFromProgress)
+        void player.play().then(scheduleWatchdog).catch(reject)
       })
       return attempt === this.speechAttempt
     } catch {
