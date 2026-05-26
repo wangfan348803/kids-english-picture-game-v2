@@ -132,11 +132,12 @@ export class GameAudio {
     this.speakSequence([{ text: word, lang: 'en-US', voice: this.pickEnglishVoice.bind(this) }])
   }
 
-  async speakAnswer(word: string, meaning: string, audioSrc?: string) {
+  async speakAnswer(word: string, meaning: string, audioSrc?: string, meaningAudioSrc?: string) {
     if (this.isMuted()) return
     this.start()
 
     if (audioSrc && (await this.playSpeechFile(audioSrc, true))) {
+      if (meaningAudioSrc && (await this.playSpeechFile(meaningAudioSrc))) return
       if (!window.speechSynthesis) return
       this.speakSequence([{ text: meaning, lang: 'zh-CN', voice: this.pickChineseVoice.bind(this) }])
       return

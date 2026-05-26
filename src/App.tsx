@@ -107,7 +107,7 @@ function App() {
 
   function speakSnapshot(target: LearningItem, answerReveal: AnswerRevealState) {
     if (answerReveal === 'revealed') {
-      void audio().speakAnswer(target.speechText, target.speechMeaning, target.audioSrc)
+      void audio().speakAnswer(target.speechText, target.speechMeaning, target.audioSrc, target.meaningAudioSrc)
       return
     }
 
@@ -140,7 +140,7 @@ function App() {
   function handleStart() {
     startAudio()
     if (answerReveal === 'revealed') {
-      void audio().speakAnswer(target.speechText, target.speechMeaning, target.audioSrc)
+      void audio().speakAnswer(target.speechText, target.speechMeaning, target.audioSrc, target.meaningAudioSrc)
       return
     }
 
@@ -172,7 +172,7 @@ function App() {
 
     if (answerReveal === 'revealed') {
       getRevealedChoiceAudioPlan(item.speechText, item.speechMeaning).forEach((action) => {
-        if (action.type === 'answerSpeech') void audio().speakAnswer(action.word, action.meaning, item.audioSrc)
+        if (action.type === 'answerSpeech') void audio().speakAnswer(action.word, action.meaning, item.audioSrc, item.meaningAudioSrc)
       })
       return
     }
@@ -192,7 +192,7 @@ function App() {
       const audioPlan = getAnswerAudioPlan(true, target.speechText, target.speechMeaning, nextStreak > 0 && nextStreak % 5 === 0 ? 'bonus' : 'correct')
       audioPlan.forEach((action) => {
         if (action.type === 'sound') audio().play(action.kind)
-        if (action.type === 'answerSpeech') window.setTimeout(() => void audio().speakAnswer(action.word, action.meaning, target.audioSrc), 360)
+        if (action.type === 'answerSpeech') window.setTimeout(() => void audio().speakAnswer(action.word, action.meaning, target.audioSrc, target.meaningAudioSrc), 360)
       })
     } else {
       const nextScore = Math.max(0, score - 2)

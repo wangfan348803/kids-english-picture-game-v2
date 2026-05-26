@@ -160,4 +160,17 @@ describe('GameAudio speech', () => {
     expect(audioPlay).toHaveBeenCalledTimes(2)
     expect(spoken).toHaveLength(0)
   })
+
+  it('uses local English and Chinese audio files for revealed answers', async () => {
+    const audio = new GameAudio(() => 80, () => false)
+
+    const speaking = audio.speakAnswer('cat', '猫', '/audio/words/cat.mp3', '/audio/meanings/cat.mp3')
+    await vi.runAllTimersAsync()
+    await speaking
+
+    expect(createdAudioSources).toContain('/audio/words/cat.mp3')
+    expect(createdAudioSources).toContain('/audio/meanings/cat.mp3')
+    expect(audioPlay).toHaveBeenCalledTimes(2)
+    expect(spoken).toHaveLength(0)
+  })
 })

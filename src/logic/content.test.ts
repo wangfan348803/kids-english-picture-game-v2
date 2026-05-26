@@ -45,6 +45,7 @@ describe('learning content modes', () => {
     expect(item.speechText).toBe('apple')
     expect(item.meaning).toBe('苹果')
     expect(item.audioSrc).toBe('/audio/words/apple.mp3')
+    expect(item.meaningAudioSrc).toBe('/audio/meanings/apple.mp3')
   })
 
   it('uses complete sentences in sentence mode', () => {

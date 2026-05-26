@@ -17,6 +17,7 @@ export type LearningItem = {
   speechText: string
   speechMeaning: string
   audioSrc?: string
+  meaningAudioSrc?: string
   choiceStyle: ChoiceStyle
 }
 
@@ -70,6 +71,7 @@ function createWordItem(item: VocabularyItem): LearningItem {
     speechText: item.word,
     speechMeaning: item.meaning,
     audioSrc: item.audioSrc,
+    meaningAudioSrc: `/audio/meanings/${audioSlug(item.word)}.mp3`,
     choiceStyle: 'picture',
   }
 }
@@ -154,4 +156,8 @@ function createBeVerbItem(item: VocabularyItem, subject: 'I' | 'It', answer: 'am
 
 function articleFor(word: string) {
   return /^[aeiou]/i.test(word) ? 'an' : 'a'
+}
+
+function audioSlug(word: string) {
+  return word.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
