@@ -54,6 +54,7 @@ describe('GameAudio speech', () => {
         play = audioPlay
         pause = audioPause
         load = vi.fn()
+        removeAttribute = vi.fn()
         addEventListener = audioAddEventListener
       },
     )
@@ -175,6 +176,24 @@ describe('GameAudio speech', () => {
 
     expect(audioPause).toHaveBeenCalled()
     expect(createdAudioSources.some((source) => source.startsWith('/audio/words/cat.mp3?v='))).toBe(true)
+    expect(createdAudioSources.some((source) => source.startsWith('/audio/words/dog.mp3?v='))).toBe(true)
+  })
+
+  it('does not fall back to browser speech for an interrupted answer on desktop', async () => {
+    vi.stubGlobal('navigator', {
+      userAgent: 'Mozilla/5.0 Desktop',
+      vibrate,
+    })
+
+    const audio = new GameAudio(() => 80, () => false)
+
+    const interrupted = audio.speakAnswer('cat', '猫', '/audio/words/cat.mp3', '/audio/meanings/cat.mp3')
+    await audio.speak('dog', '/audio/words/dog.mp3')
+    await vi.runAllTimersAsync()
+    await interrupted
+
+    expect(audioPause).toHaveBeenCalled()
+    expect(spoken).toHaveLength(0)
     expect(createdAudioSources.some((source) => source.startsWith('/audio/words/dog.mp3?v='))).toBe(true)
   })
 

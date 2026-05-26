@@ -24,7 +24,7 @@ const patterns: Record<SoundKind, Tone[]> = {
   ],
 }
 
-const speechAssetVersion = '20260526-local-audio-3'
+const speechAssetVersion = '20260526-local-audio-4'
 
 export class GameAudio {
   private context: AudioContext | null = null
@@ -95,8 +95,7 @@ export class GameAudio {
   stopSpeech() {
     this.speechAttempt += 1
     for (const player of this.speechPlayers) {
-      player.pause()
-      player.currentTime = 0
+      stopAudioPlayer(player)
     }
     this.speechPlayers.clear()
     if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel?.()
@@ -165,6 +164,7 @@ export class GameAudio {
       return
     }
 
+    if (attempt !== this.speechAttempt) return
     if (!window.speechSynthesis) return
 
     await this.speakSequence([
@@ -375,6 +375,17 @@ function versionedAudioSource(source: string) {
   if (!source.startsWith('/audio/')) return source
   const separator = source.includes('?') ? '&' : '?'
   return `${source}${separator}v=${speechAssetVersion}`
+}
+
+function stopAudioPlayer(player: HTMLAudioElement) {
+  player.pause()
+  player.currentTime = 0
+  player.removeAttribute('src')
+  try {
+    player.load()
+  } catch {
+    // Releasing a media element can throw in embedded browsers; pausing still stops audible playback.
+  }
 }
 
 function waveSample(phase: number, type: OscillatorType) {
