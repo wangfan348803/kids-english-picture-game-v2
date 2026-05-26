@@ -156,7 +156,7 @@ describe('GameAudio speech', () => {
 
     await audio.speak('cat', '/audio/words/cat.mp3')
 
-    expect(createdAudioSources).toContain('/audio/words/cat.mp3')
+    expect(createdAudioSources.some((source) => source.startsWith('/audio/words/cat.mp3?v='))).toBe(true)
     expect(audioPlay).toHaveBeenCalledTimes(2)
     expect(spoken).toHaveLength(0)
   })
@@ -168,8 +168,8 @@ describe('GameAudio speech', () => {
     await vi.runAllTimersAsync()
     await speaking
 
-    expect(createdAudioSources).toContain('/audio/words/cat.mp3')
-    expect(createdAudioSources).toContain('/audio/meanings/cat.mp3')
+    expect(createdAudioSources.some((source) => source.startsWith('/audio/words/cat.mp3?v='))).toBe(true)
+    expect(createdAudioSources.some((source) => source.startsWith('/audio/meanings/cat.mp3?v='))).toBe(true)
     expect(audioPlay).toHaveBeenCalledTimes(2)
     expect(spoken).toHaveLength(0)
   })

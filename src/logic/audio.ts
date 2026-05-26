@@ -24,6 +24,8 @@ const patterns: Record<SoundKind, Tone[]> = {
   ],
 }
 
+const speechAssetVersion = '20260526-local-audio-2'
+
 export class GameAudio {
   private context: AudioContext | null = null
   private gain: GainNode | null = null
@@ -155,7 +157,7 @@ export class GameAudio {
     if (typeof Audio === 'undefined') return false
 
     try {
-      const player = new Audio(source)
+      const player = new Audio(versionedAudioSource(source))
       player.volume = Math.max(0, Math.min(100, this.getVolume())) / 100
       player.currentTime = 0
 
@@ -295,6 +297,12 @@ function createWavBytes(tones: Tone[]) {
   }
 
   return buffer
+}
+
+function versionedAudioSource(source: string) {
+  if (!source.startsWith('/audio/')) return source
+  const separator = source.includes('?') ? '&' : '?'
+  return `${source}${separator}v=${speechAssetVersion}`
 }
 
 function waveSample(phase: number, type: OscillatorType) {
